@@ -27,7 +27,7 @@ export default function Messages() {
       e => { if (live) { setList(l => l || []); toast(e.message); } },
     );
     load();
-    const t = setInterval(load, 20000);
+    const t = setInterval(load, 2500);
     return () => { live = false; clearInterval(t); };
   }, [n, loadNotifs]);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [list]);

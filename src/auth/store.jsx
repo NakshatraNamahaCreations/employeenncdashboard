@@ -48,7 +48,7 @@ export function PortalProvider({ children }) {
   }, [isEmp]);
   useEffect(() => {
     queueMicrotask(loadNotifs);
-    const t = setInterval(loadNotifs, 45000);
+    const t = setInterval(loadNotifs, 15000);
     return () => clearInterval(t);
   }, [loadNotifs, session?.token]);
   const readNotifs = useCallback(async (ids) => {

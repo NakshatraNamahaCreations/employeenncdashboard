@@ -41,7 +41,7 @@ export default function TeamChat() {
     let live = true;
     const load = () => api("/team/channels").then(j => { if (live) { setChans(j.data); setUnread(j.unread); } }, () => {});
     load();
-    const t = setInterval(load, open ? 10000 : 25000);
+    const t = setInterval(load, open ? 3000 : 8000);
     return () => { live = false; clearInterval(t); };
   }, [open, tick]);
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function TeamChat() {
     let live = true;
     const load = () => api(`/team/messages?channel=${encodeURIComponent(cur.id)}`).then(j => live && setMsgs(j.data), () => {});
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 2000);
     return () => { live = false; clearInterval(t); };
   }, [cur, tick]);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs.length, cur]);
