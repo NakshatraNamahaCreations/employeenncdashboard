@@ -408,7 +408,7 @@ function BugView({ bug, tester, onClose, act }) {
           )}
           {devCan && st === "fixed" && st !== m.status && (
             <div className="g2">
-              <div className="f"><label htmlFor="bv-u">Commit link for the fix</label><input id="bv-u" value={fix.url} onChange={e => setFix(s => ({ ...s, url: e.target.value }))} /></div>
+              <div className="f"><label htmlFor="bv-u">Commit link for the fix</label><input id="bv-u" type="text" value={fix.url} onChange={e => setFix(s => ({ ...s, url: e.target.value }))} /></div>
               <div className="f"><label htmlFor="bv-h">Time spent (hours)</label><input id="bv-h" type="number" min="0" step="0.25" value={fix.hrs} onChange={e => setFix(s => ({ ...s, hrs: e.target.value }))} /></div>
             </div>
           )}
@@ -463,7 +463,8 @@ function SendBugs({ onSent }) {
   if (!projects.length) return <div className="empty">No projects are assigned to you yet. Ask your manager to assign you in the CRM.</div>;
   return (
     <form onSubmit={submit}>
-      <section className="card"><div className="pad">
+      <section className="card sb-top">
+        <div className="sb-step"><span className="lw-n">1</span><b>Where and to whom</b></div>
         <div className="g2">
           <div className="f"><label htmlFor="sb-p">Project</label>
             <select id="sb-p" value={ref} onChange={e => setRef(e.target.value)} required>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
@@ -473,34 +474,38 @@ function SendBugs({ onSent }) {
               {(devs || []).map(d => <option key={d.id} value={d.id}>{d.name} · {ROLES[d.role]?.l || ""}</option>)}
             </select></div>
         </div>
-      </div></section>
+      </section>
 
+      <div className="sb-step"><span className="lw-n">2</span><b>The bugs</b><span className="sub">one card per bug</span></div>
       {rows.map((r, i) => (
-        <section className="card bug-row" key={r.k}>
-          <h3>Bug {i + 1}{rows.length > 1 && <button type="button" className="btn sm r" onClick={() => setRows(L => L.filter(x => x.k !== r.k))}>Remove</button>}</h3>
-          <div className="pad">
-            <div className="f"><label htmlFor={`sb-t${r.k}`}>What is wrong</label>
-              <input id={`sb-t${r.k}`} value={r.title} onChange={e => set(r.k, "title")(e.target.value)} placeholder="Checkout total wrong when coupon applied" required={i === 0} /></div>
-            <div className="g3">
-              <div className="f"><label htmlFor={`sb-m${r.k}`}>Module or screen</label><input id={`sb-m${r.k}`} value={r.mod} onChange={e => set(r.k, "mod")(e.target.value)} placeholder="Eg. Checkout" /></div>
-              <div className="f"><label htmlFor={`sb-s${r.k}`}>Severity</label>
-                <select id={`sb-s${r.k}`} value={r.sev} onChange={e => set(r.k, "sev")(e.target.value)}>{["High", "Medium", "Low"].map(x => <option key={x}>{x}</option>)}</select></div>
-              <div className="f"><label htmlFor={`sb-h${r.k}`}>Time spent</label>
-                <div className="row" style={{ gap: 6 }}>
-                  <input id={`sb-h${r.k}`} type="number" min="0" step={r.unit === "h" ? "0.25" : "5"} value={r.t} onChange={e => set(r.k, "t")(e.target.value)} placeholder={r.unit === "h" ? "1" : "30"} style={{ flex: 1, minWidth: 0 }} />
-                  <select aria-label="Unit" value={r.unit} onChange={e => set(r.k, "unit")(e.target.value)} style={{ width: 92 }}><option value="min">minutes</option><option value="h">hours</option></select>
-                </div></div>
-            </div>
-            <div className="f"><label htmlFor={`sb-st${r.k}`}>Steps to reproduce</label><textarea id={`sb-st${r.k}`} rows={2} value={r.steps} onChange={e => set(r.k, "steps")(e.target.value)} /></div>
-            <div className="f"><label htmlFor={`sb-u${r.k}`}>Page or video link (optional)</label><input id={`sb-u${r.k}`} value={r.url} onChange={e => set(r.k, "url")(e.target.value)} /></div>
+        <section className={`card sb-bug sev-${r.sev.toLowerCase()}`} key={r.k}>
+          <div className="sb-bug-h">
+            <span className="sb-num">{i + 1}</span>
+            <input type="text" className="sb-title" aria-label={`Bug ${i + 1}: what is wrong`} value={r.title} onChange={e => set(r.k, "title")(e.target.value)}
+              placeholder="What is wrong? Eg. Checkout total wrong when coupon applied" required={i === 0} />
+            {rows.length > 1 && <button type="button" className="iconbtn sm" aria-label={`Remove bug ${i + 1}`} title="Remove" onClick={() => setRows(L => L.filter(x => x.k !== r.k))}>×</button>}
+          </div>
+          <div className="sb-grid">
+            <div className="f"><label htmlFor={`sb-m${r.k}`}>Module or screen</label><input id={`sb-m${r.k}`} type="text" value={r.mod} onChange={e => set(r.k, "mod")(e.target.value)} placeholder="Eg. Checkout" /></div>
+            <div className="f"><label htmlFor={`sb-s${r.k}`}>Severity</label>
+              <select id={`sb-s${r.k}`} value={r.sev} onChange={e => set(r.k, "sev")(e.target.value)}>{["High", "Medium", "Low"].map(x => <option key={x}>{x}</option>)}</select></div>
+            <div className="f"><label htmlFor={`sb-h${r.k}`}>Time spent</label>
+              <div className="sb-time">
+                <input id={`sb-h${r.k}`} type="number" min="0" step={r.unit === "h" ? "0.25" : "5"} value={r.t} onChange={e => set(r.k, "t")(e.target.value)} placeholder={r.unit === "h" ? "1" : "30"} />
+                <select aria-label="Unit" value={r.unit} onChange={e => set(r.k, "unit")(e.target.value)}><option value="min">min</option><option value="h">hours</option></select>
+              </div></div>
+          </div>
+          <div className="f"><label htmlFor={`sb-st${r.k}`}>Steps to reproduce</label><textarea id={`sb-st${r.k}`} rows={3} value={r.steps} onChange={e => set(r.k, "steps")(e.target.value)} placeholder={"1. Open the cart\n2. Apply coupon NNC10\n3. Total does not change"} /></div>
+          <div className="sb-foot">
+            <div className="f"><label htmlFor={`sb-u${r.k}`}>Page or video link (optional)</label><input id={`sb-u${r.k}`} type="text" value={r.url} onChange={e => set(r.k, "url")(e.target.value)} placeholder="https://" /></div>
             <FilePick id={`sb-f${r.k}`} files={r.files} onChange={set(r.k, "files")} />
           </div>
         </section>
       ))}
-      <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 20 }}>
-        <button type="button" className="btn" onClick={() => setRows(L => [...L, newRow()])}>+ Add another bug</button>
-        <span className="sub" style={{ flex: 1 }}>{filled.length} bug{filled.length === 1 ? "" : "s"}{total ? ` · ${fmtMins(total)} on your timesheet` : ""}</span>
-        <button className="btn p lg" disabled={busy || !dev}>{busy ? "Sending…" : `Send ${filled.length || ""} bug${filled.length === 1 ? "" : "s"}`}</button>
+      <button type="button" className="sb-add" onClick={() => setRows(L => [...L, newRow()])}>+ Add another bug</button>
+      <div className="sb-bar">
+        <span><b>{filled.length} bug{filled.length === 1 ? "" : "s"}</b>{dev ? ` to ${devs?.find(d => d.id === dev)?.name || ""}` : " · choose a developer"}{total ? ` · ${fmtMins(total)} on your timesheet` : ""}</span>
+        <button className="btn p lg" disabled={busy || !dev || !filled.length}>{busy ? "Sending…" : `Send ${filled.length > 1 ? `${filled.length} bugs` : "bug"}`}</button>
       </div>
     </form>
   );
