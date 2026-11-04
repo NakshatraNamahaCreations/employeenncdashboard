@@ -31,7 +31,8 @@ function Bellbox() {
     document.addEventListener("mousedown", k);
     return () => document.removeEventListener("mousedown", k);
   }, [open]);
-  const go = (n) => { setOpen(false); if (!n.read) readNotifs([n._id]); if (n.link) nav(n.link); };
+  // opening a notification takes you to its page and removes it from the list
+  const go = (n) => { setOpen(false); readNotifs([n._id]); if (n.link) nav(n.link); };
   return (
     <div className="bell" ref={box}>
       <button type="button" className={`iconbtn ${notif.unread ? "has" : ""}`} aria-label={`Notifications${notif.unread ? `, ${notif.unread} new` : ""}`}
@@ -40,7 +41,7 @@ function Bellbox() {
       </button>
       {open && (
         <div className="bellpop" role="dialog" aria-label="Notifications">
-          <div className="bp-h"><b>Notifications</b>{notif.unread > 0 && <button type="button" className="link" onClick={() => readNotifs()}>Mark all read</button>}</div>
+          <div className="bp-h"><b>Notifications</b>{notif.list.length > 0 && <button type="button" className="link" onClick={() => readNotifs()}>Clear all</button>}</div>
           <div className="bp-l">
             {notif.list.length ? notif.list.map(n => {
               const Ic = N_IC[n.kind] || Info;

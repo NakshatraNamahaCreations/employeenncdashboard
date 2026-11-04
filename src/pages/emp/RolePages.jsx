@@ -285,15 +285,31 @@ function BugLi({ b, children }) {
   );
 }
 
+// One test run a tester logged: what was tested, passed and failed
+function TestLi({ t }) {
+  const m = t.meta || {}, fail = +m.fail || 0;
+  return (
+    <div className="li">
+      <div className="x"><b>{t.title}</b>
+        <span className="sub">{[t.refName, m.mod, m.ver && `v${m.ver}`, t.account?.name ? `by ${t.account.name}` : "", fd(t.date)].filter(Boolean).join(" · ")}</span>
+        {t.url && <a className="url" href={t.url} target="_blank" rel="noopener noreferrer">{t.url.replace(/^https?:\/\//, "")}</a>}
+      </div>
+      <span className="pill p-ok">{+m.pass || 0} passed</span>
+      <span className={`pill ${fail ? "p-red" : "p-other"}`}>{fail} failed</span>
+    </div>
+  );
+}
+
 function Bugs() {
   const P = usePortal();
   const tester = P.session.user.role === "test";
   const B = useGet("/bugs");
+  const Act = useGet("/bugs/activity");
   const [fix, setFix] = useState(null);
   const [reopen, setReopen] = useState(null);
   const all = (B.data || []).slice().sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1));
   const act = async (id, body, ok) => {
-    try { await api(`/bugs/${id}`, { method: "PATCH", body }); toast(ok); B.reload(); P.refresh(); return true; }
+    try { await api(`/bugs/${id}`, { method: "PATCH", body }); toast(ok); B.reload(); Act.reload(); P.refresh(); return true; }
     catch (ex) { toast(ex.message); return false; }
   };
   const open = all.filter(b => ["open", "reopened"].includes(b.meta?.status));
@@ -329,6 +345,15 @@ function Bugs() {
       )}
       <section className="card"><h3>Recently verified</h3>
         {done.length ? done.map(b => <BugLi key={b._id} b={b} />) : <div className="empty">None.</div>}</section>
+
+      <section className="card"><h3>{tester ? "Test runs" : "Test runs on my projects"} <small>{Act.data?.tests.length || 0}</small></h3>
+        {Act.data?.tests.length ? Act.data.tests.map(t => <TestLi key={t._id} t={t} />)
+          : <div className="empty">{Act.loading ? "Loading…" : tester ? "Log a test run from Log work." : "No test runs on your projects yet."}</div>}</section>
+      {!tester && (
+        <section className="card"><h3>Other bugs on my projects <small>{Act.data?.bugs.length || 0}</small></h3>
+          {Act.data?.bugs.length ? Act.data.bugs.map(b => <BugLi key={b._id} b={b} />)
+            : <div className="empty">{Act.loading ? "Loading…" : "No bugs raised for your teammates on these projects."}</div>}</section>
+      )}
 
       {fix && (
         <Modal title={`Mark ${fix.meta?.bug} fixed`} onClose={() => setFix(null)}>

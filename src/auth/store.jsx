@@ -52,6 +52,10 @@ export function PortalProvider({ children }) {
     return () => clearInterval(t);
   }, [loadNotifs, session?.token]);
   const readNotifs = useCallback(async (ids) => {
+    setNotif(n => {
+      const list = ids ? n.list.filter(x => !ids.includes(x._id)) : [];
+      return { ...n, list, unread: list.filter(x => !x.read).length };
+    });
     try { await api("/notifications/read", { method: "PUT", body: { ids } }); } catch { /* the next check retries */ }
     loadNotifs();
   }, [loadNotifs]);

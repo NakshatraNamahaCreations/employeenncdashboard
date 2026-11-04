@@ -29,12 +29,20 @@ export function EntryLi({ e, onDelete }) {
   );
 }
 
+// The task's project, as a link to its project page when it is one of mine
+export function TaskRef({ t, empty }) {
+  const P = usePortal();
+  if (!t.refName) return empty;
+  const mine = t.refId && P.assigned.projects.some(p => p.id === String(t.refId)) && ROLES[P.session.user.role]?.pick === "projects";
+  return mine ? <Link to={`/projects/${t.refId}`}>{t.refName}</Link> : t.refName;
+}
+
 function TaskLi({ t, onStatus }) {
   const late = t.status !== "done" && t.due < today();
   return (
     <div className="li">
       <div className="x"><b style={t.status === "done" ? { color: "var(--mut)" } : undefined}>{t.title}</b>
-        <span className="sub">{t.refName || "No client or project"} · {t.from === "me" ? "my task" : `from ${t.from}`} · due {t.due === today() ? "today" : fd(t.due)}</span></div>
+        <span className="sub"><TaskRef t={t} empty="No client or project" /> · {t.from === "me" ? "my task" : `from ${t.from}`} · due {t.due === today() ? "today" : fd(t.due)}</span></div>
       {t.status === "done" ? <span className="pill p-ok">Done</span> : (
         <>
           {late && <span className="pill p-red">Overdue</span>}
@@ -72,7 +80,7 @@ function WeekStrip({ entries, days }) {
 
 /* ───────── My day ───────── */
 // Developers get their own dashboard (projects, fixes, meetings, calendar)
-const DEV_ROLES = ["full", "web", "back", "app"];
+const DEV_ROLES = ["full", "web", "back", "app", "other"];
 export function MyDay() {
   const { session } = usePortal();
   return DEV_ROLES.includes(session.user.role) ? <DevDay /> : <StdDay />;

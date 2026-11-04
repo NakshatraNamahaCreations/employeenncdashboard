@@ -13,3 +13,7 @@ export function useProjects() {
   }, [entries.length]);
   return st;
 }
+
+export const isDone = (p) => p.completed || p.stage === "Project Completed";
+// Active projects first, completed ones after
+export const byLive = (L) => [...L].sort((a, b) => Number(isDone(a)) - Number(isDone(b)));

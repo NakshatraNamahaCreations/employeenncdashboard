@@ -3,9 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES, TY } from "../../roles";
 import { api } from "../../api";
-import { EntryLi, SubmitDay, Blocked } from "./EmpPages";
+import { EntryLi, SubmitDay, Blocked, TaskRef } from "./EmpPages";
 import { ProjectCard } from "./Projects";
-import { useProjects } from "./useProjects";
+import { useProjects, byLive } from "./useProjects";
 import { today, T, fd, fdw, h1, pct, weekStart, greet, parse, iso, ampm } from "../../util";
 
 // Dashboard for developers (full stack, website, backend, app): projects, fixes, meetings, calendar
@@ -93,7 +93,7 @@ export default function DevDay() {
 
       <div className="pj-headrow"><h3>My projects</h3><span className="sub">{live.length} active · status from the CRM</span><Link className="btn sm" to="/projects">All projects</Link></div>
       {pj.data == null ? <div className="card"><div className="empty">Loading…</div></div> : pj.data.length ? (
-        <div className="pj-grid" style={{ marginBottom: 16 }}>{pj.data.filter(p => !p.completed && p.stage !== "Project Completed").slice(0, 6).map(p => <ProjectCard key={p.id} p={p} />)}</div>
+        <div className="pj-grid" style={{ marginBottom: 16 }}>{byLive(pj.data).slice(0, 6).map(p => <ProjectCard key={p.id} p={p} />)}</div>
       ) : <div className="card"><div className="empty">No projects assigned yet. Your manager adds you to a project's developers in the CRM.</div></div>}
 
       <div className="grid2">
@@ -122,7 +122,7 @@ export default function DevDay() {
           </section>
           <section className="card"><h3>Tasks due <Link className="btn sm r" to="/tasks">All tasks</Link></h3>
             {due.length ? due.map(t => (
-              <div key={t._id} className="li"><div className="x"><b>{t.title}</b><span className="sub">{t.refName || "No project"} · due {t.due === today() ? "today" : fd(t.due)}</span></div>
+              <div key={t._id} className="li"><div className="x"><b>{t.title}</b><span className="sub"><TaskRef t={t} empty="No project" /> · due {t.due === today() ? "today" : fd(t.due)}</span></div>
                 {t.due < today() && <span className="pill p-red">Overdue</span>}
                 <button type="button" className="btn sm p" onClick={() => P.setTaskStatus(t._id, "done")}>Done</button></div>
             )) : <div className="empty">No tasks due.</div>}

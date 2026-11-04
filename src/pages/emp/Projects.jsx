@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useProjects } from "./useProjects";
+import { useProjects, isDone, byLive } from "./useProjects";
 import { Link, useParams } from "react-router-dom";
 import {
   FolderKanban, FileText, Plug, Users, Bug, Clock, CalendarDays, ExternalLink, Eye, EyeOff, Copy, ArrowLeft, MapPin, ListChecks, Download, AlertTriangle,
@@ -64,15 +64,15 @@ export function ProjectCard({ p }) {
 /* ───────── list ───────── */
 export function ProjectsPage() {
   const { data, err } = useProjects();
-  const [f, setF] = useState("active");
-  const L = (data || []).filter(p => (f === "all" ? true : f === "done" ? p.completed || p.stage === "Project Completed" : !p.completed && p.stage !== "Project Completed"));
+  const [f, setF] = useState("all");
+  const L = byLive(data || []).filter(p => (f === "all" ? true : f === "done" ? isDone(p) : !isDone(p)));
   return (
     <>
       <h2 className="t">My projects<span>.</span></h2>
       <p className="lead">Every project you are on, with its status, documents, integrations and team. Assigned by your manager in the CRM.</p>
       {err && <div className="alert am">{err}</div>}
-      <div className="chips">{[["active", "Active"], ["done", "Completed"], ["all", "All"]].map(([k, l]) => (
-        <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => setF(k)}>{l}</button>
+      <div className="chips">{[["all", "All"], ["active", "Active"], ["done", "Completed"]].map(([k, l]) => (
+        <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => setF(k)}>{l} <small>{(data || []).filter(p => k === "all" || (k === "done") === isDone(p)).length}</small></button>
       ))}</div>
       {!data ? <div className="card"><div className="empty">Loading…</div></div> : L.length ? (
         <div className="pj-grid">{L.map(p => <ProjectCard key={p.id} p={p} />)}</div>
