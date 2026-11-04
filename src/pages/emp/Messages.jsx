@@ -4,6 +4,9 @@ import { usePortal } from "../../auth/store";
 import { api } from "../../api";
 import { toast } from "../../toast";
 import { fdw } from "../../util";
+import { useNewMessage } from "../../ding";
+
+const mine = (m) => m.from !== "admin";
 
 // Chat between the employee and the admin (the admin replies from the CRM → Employee Portal → Messages)
 const tm = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
@@ -12,6 +15,7 @@ const dk = (d) => new Date(d).toLocaleDateString("en-CA");
 export default function Messages() {
   const P = usePortal();
   const [list, setList] = useState(null);
+  useNewMessage(list, "admin", mine);
   const [text, setText] = useState("");
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);

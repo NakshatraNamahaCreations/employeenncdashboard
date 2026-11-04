@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { api, readAuth, writeAuth, setOnExpired } from "../api";
 import { toast } from "../toast";
 import { T, today, nowHM } from "../util";
+import { useRise } from "../ding";
 
 const Ctx = createContext(null);
 export const usePortal = () => useContext(Ctx);
@@ -18,6 +19,8 @@ export function PortalProvider({ children }) {
 
   const signIn = useCallback((s, remember = true) => { writeAuth(s, remember); setData(EMPTY); setSession(s); }, []);
   const [notif, setNotif] = useState(NO_NOTIF);
+  useRise(notif.unread, "notif");             // sound for a new notification
+  useRise(notif.unreadMessages, "msg");       // and for a new message from the admin
   const signOut = useCallback(() => { writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setSession(null); }, []);
   useEffect(() => { setOnExpired(() => { signOut(); toast("Your session has ended. Please sign in again."); }); }, [signOut]);
 
@@ -41,7 +44,7 @@ export function PortalProvider({ children }) {
   }, [isEmp]);
   useEffect(() => { queueMicrotask(refresh); }, [refresh, session?.token]);
 
-  // Bell notifications and unread admin messages, checked every 45 seconds
+  // Bell notifications and unread admin messages, checked every 15 seconds
   const loadNotifs = useCallback(() => {
     if (!isEmp) return;
     api("/notifications").then(j => setNotif(j.data), () => {});

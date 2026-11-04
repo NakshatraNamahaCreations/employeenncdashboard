@@ -5,6 +5,9 @@ import Mascot from "./Mascot";
 import { api } from "./api";
 import { ROLES, initials } from "./roles";
 import { toast } from "./toast";
+import { useRise, useNewMessage } from "./ding";
+
+const mine = (m) => m.mine;
 
 // Floating team chat (bottom left): group channels for everyone and direct messages between employees.
 // The admin joins the group channels from the CRM.
@@ -26,6 +29,8 @@ export default function TeamChat() {
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
   const end = useRef(null);
+  useRise(unread, "msg");
+  useNewMessage(msgs, cur?.id, mine);
   const { session } = usePortal();
   const first = String(session?.user?.name || "").split(" ")[0];
   // Short greeting once per browser session
