@@ -16,12 +16,13 @@ export function PortalProvider({ children }) {
   const [session, setSession] = useState(readAuth);
   const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [attendance, setAttendance] = useState(null);   // today's check in / check out
 
   const signIn = useCallback((s, remember = true) => { writeAuth(s, remember); setData(EMPTY); setSession(s); }, []);
   const [notif, setNotif] = useState(NO_NOTIF);
   useRise(notif.unread, "notif");             // sound for a new notification
   useRise(notif.unreadMessages, "msg");       // and for a new message from the admin
-  const signOut = useCallback(() => { writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setSession(null); }, []);
+  const signOut = useCallback(() => { writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setAttendance(null); setSession(null); }, []);
   useEffect(() => { setOnExpired(() => { signOut(); toast("Your session has ended. Please sign in again."); }); }, [signOut]);
 
   const isEmp = session?.type === "emp";
@@ -31,9 +32,11 @@ export function PortalProvider({ children }) {
     if (!isEmp) return;
     setLoading(true);
     try {
-      const [me, work, tasks, blockers, meetings, assigned] = await Promise.all([
+      const [me, work, tasks, blockers, meetings, assigned, att] = await Promise.all([
         api("/me"), api(`/work?from=${T(-70)}&to=${today()}`), api("/tasks"), api("/blockers"), api("/meetings"), api("/assigned"),
+        api(`/attendance?date=${today()}`).catch(() => null),
       ]);
+      if (att) setAttendance(att.data);
       setSession(s => { const n = { ...s, user: me.data }; writeAuth(n, !!localStorage.getItem("nnc-portal-auth")); return n; });
       setData({
         entries: work.data.work, days: work.data.days, tasks: tasks.data, blockers: blockers.data,
@@ -63,9 +66,9 @@ export function PortalProvider({ children }) {
     loadNotifs();
   }, [loadNotifs]);
 
-  // Run a change on the server, then reload
+  // Run a change on the server, then reload in the background (the screen does not wait for it)
   const run = useCallback(async (fn, ok) => {
-    try { const r = await fn(); if (ok) toast(ok); await refresh(); return r; }
+    try { const r = await fn(); if (ok) toast(ok); refresh(); return r; }
     catch (err) { toast(err.message); return null; }
   }, [refresh]);
 
@@ -81,12 +84,27 @@ export function PortalProvider({ children }) {
     saveMeeting: async (m) => {
       try {
         const r = await api(m._id ? `/meetings/${m._id}` : "/meetings", { method: m._id ? "PUT" : "POST", body: m });
-        await refresh(); return r.data;
+        // show the saved meeting straight away; the rest (its timesheet entry) reloads in the background
+        const { images, ...slim } = r.data;
+        const row = { ...slim, imgCount: (images || []).length };
+        setData(d => ({ ...d, meetings: [row, ...d.meetings.filter(x => x._id !== row._id)] }));
+        refresh();
+        return row;
       } catch (err) { toast(err.message); return null; }
     },
     removeMeeting: (id) => run(() => api(`/meetings/${id}`, { method: "DELETE" }), "Meeting deleted"),
     updateMe: (patch) => run(() => api("/me", { method: "PUT", body: patch }), "Details saved"),
-  }), [session, signIn, signOut, refresh, loading, run, data, notif, loadNotifs, readNotifs]);
+    attendance,
+    // Check in / check out; the server records the time
+    mark: async (action) => {
+      try {
+        const j = await api("/attendance", { method: "POST", body: { action, date: today() } });
+        setAttendance(j.data);
+        toast(action === "in" ? `Checked in at ${nowHM()}` : `Checked out at ${nowHM()}`);
+        return true;
+      } catch (err) { toast(err.message); return false; }
+    },
+  }), [session, signIn, signOut, refresh, loading, run, data, notif, loadNotifs, readNotifs, attendance]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

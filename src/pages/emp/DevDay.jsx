@@ -53,7 +53,7 @@ export default function DevDay() {
   const fixes = P.entries.filter(e => e.type === "bugfix");
   const fixedToday = fixes.filter(e => e.date === today());
   const fixedWeek = fixes.filter(e => e.date >= ws);
-  const openBugs = bugs.filter(b => ["open", "reopened"].includes(b.meta?.status));
+  const openBugs = bugs.filter(b => ["open", "reopened", "progress", "info"].includes(b.meta?.status));
   const projects = P.assigned.projects;
   const live = projects.filter(p => !p.completed && p.stage !== "Project Completed");
   const meetToday = ev.filter(e => e.date === today());
@@ -110,7 +110,7 @@ export default function DevDay() {
                 {openBugs.slice(0, 6).map(b => (
                   <div key={b._id} className="li"><div className="x"><span className="tag">{b.meta?.bug}</span><b>{b.title}</b>
                     <span className="sub">{[b.refName, b.meta?.sev, b.account?.name ? `from ${b.account.name}` : ""].filter(Boolean).join(" · ")}</span></div>
-                    {b.meta?.status === "reopened" ? <span className="pill p-red">Reopened</span> : <span className="pill p-amb">Open</span>}</div>
+                    {b.meta?.status === "reopened" ? <span className="pill p-red">Reopened</span> : b.meta?.status === "progress" ? <span className="pill p-amb">In progress</span> : b.meta?.status === "info" ? <span className="pill p-amb">Needs info</span> : <span className="pill p-amb">Open</span>}</div>
                 ))}
               </>
             )}

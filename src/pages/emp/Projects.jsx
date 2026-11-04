@@ -256,7 +256,7 @@ function WorkTab({ p }) {
   const bugs = p.work.filter(w => w.type === "bug");
   const people = [...new Map(p.work.map(w => [String(w.account), w.by])).entries()];
   const L = p.work.filter(w => w.type !== "bug" && (!who || String(w.account) === who));
-  const bp = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], fixed: ["Fixed, to verify", "p-blue"], verified: ["Verified", "p-ok"] };
+  const bp = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progress: ["In progress", "p-amb"], info: ["Needs more info", "p-amb"], fixed: ["Fixed, to verify", "p-blue"], notbug: ["Not a bug", "p-gr"], verified: ["Verified", "p-ok"] };
   return (
     <div className="grid2">
       <section className="card"><h3>Work logged <small>{L.length} items · {h1(L.reduce((a, w) => a + (w.hrs || 0), 0))} h</small>

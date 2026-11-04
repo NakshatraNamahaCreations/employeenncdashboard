@@ -284,8 +284,8 @@ export function LogWork() {
         <div><h2 className="t">Log work<span>.</span></h2>
           <p className="lead" style={{ margin: 0 }}>Your timesheet for {fdw(today())}. Log each piece of work when you finish it, then submit the day before you leave.</p></div>
       </div>
-      <DayPanel hrs={hToday} items={todayL.length} submitted={rec} onSubmit={() => setSubmitting(true)} onLog={() => document.getElementById("lw-types")?.scrollIntoView({ behavior: "smooth" })} />
-      {locked && <div className="alert ok">Today is submitted and locked. You can still log work for the two days before, if they are not submitted.</div>}
+      <DayPanel hrs={hToday} extra={todayL.filter(e => e.meta?.extra).reduce((a, e) => a + (e.hrs || 0), 0)} items={todayL.length} submitted={rec} onSubmit={() => setSubmitting(true)} onLog={() => document.getElementById("lw-types")?.scrollIntoView({ behavior: "smooth" })} />
+      {locked && <div className="alert ok">Today is submitted. Anything you log for today now is saved as <b>extra work</b>, on top of your day.</div>}
       <section className="card" id="lw-types"><h3>What did you work on? <small>pick one to log it</small></h3>
         <div className="pad"><TypeTiles types={typesFor(role)} onPick={pickType} /></div>
       </section>
@@ -325,7 +325,7 @@ export function LogWork() {
                 <Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} min={T(-2)} />
               </div>
               {type === "backlink" && <p className="sub">Time is for all the links together.</p>}
-              <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : "Save to timesheet"}</button></div>
+              <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : locked ? "Save as extra work" : "Save to timesheet"}</button></div>
             </form>
           )}
         </section>

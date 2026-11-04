@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES } from "../../roles";
-import { api } from "../../api";
+import { api, upload, fileUrl } from "../../api";
 import { toast } from "../../toast";
 import { EntryLi } from "./EmpPages";
 import Modal from "../../Modal";
-import { today, fd, fdw, greet, rs, monthStart } from "../../util";
+import { today, fd, fdw, greet, rs, monthStart, iso } from "../../util";
 
 export function RolePage() {
   const { rolePage } = useParams();
@@ -267,20 +267,70 @@ function Designs() {
 
 /* ───────── Developers and testers: bugs ───────── */
 const SEV = { High: 0, Medium: 1, Low: 2 };
-const bugPill = (s) => ({ open: <span className="pill p-red">Open</span>, reopened: <span className="pill p-red">Reopened</span>, fixed: <span className="pill p-blue">Fixed, to verify</span>, verified: <span className="pill p-ok">Verified</span> }[s] || null);
+const ST = {
+  open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progress: ["In progress", "p-amb"], info: ["Needs more info", "p-amb"],
+  fixed: ["Fixed, to verify", "p-blue"], notbug: ["Not a bug", "p-gr"], verified: ["Verified", "p-ok"],
+};
+const DEV_ST = [["open", "Open"], ["progress", "In progress"], ["info", "Needs more info"], ["fixed", "Fixed"], ["notbug", "Not a bug"]];
+const bugPill = (s) => (ST[s] ? <span className={`pill ${ST[s][1]}`}>{ST[s][0]}</span> : null);
+const fmtMins = (m) => (!m ? "" : m < 60 ? `${m} min` : `${Math.round(m / 6) / 10} h`);
+const isImg = (f) => /^image\//.test(f.type || "") || /\.(png|jpe?g|gif|webp)$/i.test(f.url);
+const fullUrl = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
 
-function BugLi({ b, children }) {
-  const m = b.meta || {};
+// Attached screenshots and documents
+function Files({ list }) {
+  if (!list?.length) return null;
+  return (
+    <div className="bug-files">
+      {list.map((f, i) => (
+        <a key={i} href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" className={isImg(f) ? "bf-img" : "bf-doc"} title={f.name}>
+          {isImg(f) ? <img src={fileUrl(f.url)} alt={f.name} loading="lazy" /> : <span>{f.name}</span>}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// Choose files; each one uploads straight away
+function FilePick({ files, onChange, id }) {
+  const [busy, setBusy] = useState(0);
+  const pick = async (e) => {
+    const L = [...e.target.files]; e.target.value = "";
+    setBusy(n => n + L.length);
+    const out = [];
+    for (const f of L) {
+      if (f.size > 25 * 1024 * 1024) { toast(`${f.name} is over 25 MB`); setBusy(n => n - 1); continue; }
+      try { out.push(await upload(f)); } catch (ex) { toast(ex.message); }
+      setBusy(n => n - 1);
+    }
+    if (out.length) onChange(prev => [...prev, ...out]);
+  };
+  return (
+    <div className="bug-pick">
+      <label className="btn sm" htmlFor={id}>Attach images or documents</label>
+      <input id={id} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={pick} />
+      {busy > 0 && <span className="sub">Uploading {busy}…</span>}
+      {files.map((f, i) => (
+        <span key={f.url} className="bug-chip">{f.name}
+          <button type="button" aria-label={`Remove ${f.name}`} onClick={() => onChange(prev => prev.filter((_, j) => j !== i))}>×</button></span>
+      ))}
+    </div>
+  );
+}
+
+function BugLi({ b, onOpen, children }) {
+  const m = b.meta || {}, nc = (m.comments || []).filter(c => c.text || c.files?.length).length;
   return (
     <div className="li">
       <div className="x">
         <span className="tag">{m.bug}</span><b>{b.title}</b>
-        <span className="sub">{[b.refName, m.mod, m.sev, m.assignName ? `to ${m.assignName}` : "", b.account?.name ? `by ${b.account.name}` : "", fd(b.date)].filter(Boolean).join(" · ")}</span>
+        <span className="sub">{[b.refName, m.mod, m.sev, fmtMins(m.mins), m.assignName ? `to ${m.assignName}` : "", b.account?.name ? `by ${b.account.name}` : "", fd(b.date)].filter(Boolean).join(" · ")}</span>
         {m.steps && <span className="sub">Steps: {m.steps}</span>}
         {m.note && <span className="sub">Note: {m.note}</span>}
-        {b.url && <a className="url" href={b.url} target="_blank" rel="noopener noreferrer">{b.url.replace(/^https?:\/\//, "")}</a>}
+        {(m.files?.length > 0 || nc > 0) && <span className="sub">{[m.files?.length ? `${m.files.length} attachment${m.files.length > 1 ? "s" : ""}` : "", nc ? `${nc} comment${nc > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")}</span>}
       </div>
       {bugPill(m.status)}{children}
+      {onOpen && <button type="button" className="btn sm" onClick={() => onOpen(b)}>View</button>}
     </div>
   );
 }
@@ -300,86 +350,228 @@ function TestLi({ t }) {
   );
 }
 
+// A bug with its attachments, status and the comments between tester and developer
+function BugView({ bug, tester, onClose, act }) {
+  const m = bug.meta || {};
+  const [st, setSt] = useState(m.status === "reopened" ? "progress" : m.status);
+  const [text, setText] = useState("");
+  const [files, setFiles] = useState([]);
+  const [fix, setFix] = useState({ url: "", hrs: "" });
+  const [busy, setBusy] = useState(false);
+  const thread = (m.comments || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+  const devCan = !tester && m.status !== "verified";
+  const send = async (body, ok) => {
+    setBusy(true);
+    const r = await act(bug._id, { ...body, files }, ok);
+    setBusy(false);
+    if (r) { setText(""); setFiles([]); }
+    return r;
+  };
+  const submit = async (e) => {
+    e.preventDefault();
+    if (devCan && st !== m.status) {
+      await send({ action: "status", status: st, note: text.trim(), url: fullUrl(fix.url), hrs: +fix.hrs || 0 }, `Status: ${ST[st][0].replace(", to verify", "")}`);
+    } else if (text.trim() || files.length) {
+      await send({ action: "comment", text: text.trim() }, "Comment sent");
+    } else toast("Write a comment or change the status");
+  };
+  return (
+    <Modal title={`${m.bug} · ${bug.title}`} onClose={onClose}>
+      <div className="bug-view">
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          {bugPill(m.status)}{m.sev && <span className={`pill ${m.sev === "High" ? "p-red" : m.sev === "Low" ? "p-gr" : "p-amb"}`}>{m.sev}</span>}
+          {m.mins > 0 && <span className="pill p-gr">Time: {fmtMins(m.mins)}</span>}
+        </div>
+        <p className="sub" style={{ marginTop: 0 }}>{[bug.refName, m.mod, b4(bug), m.assignName ? `to ${m.assignName}` : "", fd(bug.date)].filter(Boolean).join(" · ")}</p>
+        {m.steps && <p className="bug-steps">{m.steps}</p>}
+        {bug.url && <a className="url" href={bug.url} target="_blank" rel="noopener noreferrer">{bug.url.replace(/^https?:\/\//, "")}</a>}
+        <Files list={m.files} />
+
+        <h4 className="bug-h">Updates</h4>
+        <div className="bug-thread">
+          {thread.length ? thread.map((c, i) => (
+            <div key={i} className={`bug-c ${c.by === m.assign ? "dev" : "tst"}`}>
+              <div className="bc-h"><b>{c.name}</b>{c.status && <> changed the status to {bugPill(c.status)}</>}<span>{fdt(c.at)}</span></div>
+              {c.text && <div className="bc-t">{c.text}</div>}
+              <Files list={c.files} />
+            </div>
+          )) : <div className="empty">No updates yet.</div>}
+        </div>
+
+        <form onSubmit={submit} className="bug-reply">
+          {devCan && (
+            <div className="f"><label htmlFor="bv-st">Status</label>
+              <select id="bv-st" value={st} onChange={e => setSt(e.target.value)}>
+                {DEV_ST.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                {!DEV_ST.some(([k]) => k === m.status) && <option value={m.status} disabled>{ST[m.status]?.[0] || m.status}</option>}
+              </select></div>
+          )}
+          {devCan && st === "fixed" && st !== m.status && (
+            <div className="g2">
+              <div className="f"><label htmlFor="bv-u">Commit link for the fix</label><input id="bv-u" value={fix.url} onChange={e => setFix(s => ({ ...s, url: e.target.value }))} /></div>
+              <div className="f"><label htmlFor="bv-h">Time spent (hours)</label><input id="bv-h" type="number" min="0" step="0.25" value={fix.hrs} onChange={e => setFix(s => ({ ...s, hrs: e.target.value }))} /></div>
+            </div>
+          )}
+          <div className="f"><label htmlFor="bv-t">{tester ? "Comment for the developer" : "Comment for the tester"}</label>
+            <textarea id="bv-t" rows={3} value={text} onChange={e => setText(e.target.value)} placeholder={tester ? "More detail, or what is still wrong" : "What you changed, or what you need from the tester"} /></div>
+          <FilePick id="bv-f" files={files} onChange={setFiles} />
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <button className="btn p" disabled={busy}>{busy ? "Sending…" : devCan && st !== m.status ? "Update status" : "Send comment"}</button>
+            {tester && ["fixed", "notbug"].includes(m.status) && <>
+              <button type="button" className="btn" disabled={busy || !text.trim()} title={text.trim() ? "" : "Write what is still wrong first"}
+                onClick={() => send({ action: "reopen", note: text.trim() }, "Bug reopened")}>Reopen</button>
+              <button type="button" className="btn p" disabled={busy} onClick={() => send({ action: "verify", note: text.trim() }, "Bug verified")}>Verified</button>
+            </>}
+          </div>
+        </form>
+      </div>
+    </Modal>
+  );
+}
+const b4 = (b) => (b.account?.name ? `by ${b.account.name}` : "");
+const fdt = (d) => { const x = new Date(d); return `${fd(iso(x))}, ${x.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`; };
+
+// Tester: send many bugs to one developer in one go
+const newRow = () => ({ k: Math.random().toString(36).slice(2), title: "", mod: "", sev: "Medium", steps: "", t: "", unit: "min", url: "", files: [] });
+function SendBugs({ onSent }) {
+  const P = usePortal();
+  const projects = P.assigned.projects;
+  const [devs, setDevs] = useState(null);
+  const [ref, setRef] = useState(projects[0]?.id || "");
+  const [dev, setDev] = useState("");
+  const [rows, setRows] = useState([newRow()]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api("/developers").then(j => setDevs(j.data), () => setDevs([])); }, []);
+  const set = (k, field) => (v) => setRows(L => L.map(r => (r.k === k ? { ...r, [field]: typeof v === "function" ? v(r[field]) : v } : r)));
+  const mins = (r) => Math.round((+r.t || 0) * (r.unit === "h" ? 60 : 1));
+  const filled = rows.filter(r => r.title.trim());
+  const total = filled.reduce((a, r) => a + mins(r), 0);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!filled.length) { toast("Add at least one bug"); return; }
+    setBusy(true);
+    try {
+      const items = filled.map(r => ({ title: r.title.trim(), mod: r.mod.trim(), sev: r.sev, steps: r.steps.trim(), mins: mins(r), url: fullUrl(r.url.trim()), files: r.files }));
+      await api("/bugs/batch", { method: "POST", body: { refId: ref, assign: dev, date: today(), items } });
+      toast(`${items.length} bug${items.length > 1 ? "s" : ""} sent to ${devs.find(d => d.id === dev)?.name || "the developer"}`);
+      setRows([newRow()]); P.refresh(); onSent();
+    } catch (ex) { toast(ex.message); }
+    finally { setBusy(false); }
+  };
+
+  if (!projects.length) return <div className="empty">No projects are assigned to you yet. Ask your manager to assign you in the CRM.</div>;
+  return (
+    <form onSubmit={submit}>
+      <section className="card"><div className="pad">
+        <div className="g2">
+          <div className="f"><label htmlFor="sb-p">Project</label>
+            <select id="sb-p" value={ref} onChange={e => setRef(e.target.value)} required>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          <div className="f"><label htmlFor="sb-d">Send to developer</label>
+            <select id="sb-d" value={dev} onChange={e => setDev(e.target.value)} required>
+              <option value="">{devs === null ? "Loading…" : devs.length ? "Choose a developer" : "No developers have an account yet"}</option>
+              {(devs || []).map(d => <option key={d.id} value={d.id}>{d.name} · {ROLES[d.role]?.l || ""}</option>)}
+            </select></div>
+        </div>
+      </div></section>
+
+      {rows.map((r, i) => (
+        <section className="card bug-row" key={r.k}>
+          <h3>Bug {i + 1}{rows.length > 1 && <button type="button" className="btn sm r" onClick={() => setRows(L => L.filter(x => x.k !== r.k))}>Remove</button>}</h3>
+          <div className="pad">
+            <div className="f"><label htmlFor={`sb-t${r.k}`}>What is wrong</label>
+              <input id={`sb-t${r.k}`} value={r.title} onChange={e => set(r.k, "title")(e.target.value)} placeholder="Checkout total wrong when coupon applied" required={i === 0} /></div>
+            <div className="g3">
+              <div className="f"><label htmlFor={`sb-m${r.k}`}>Module or screen</label><input id={`sb-m${r.k}`} value={r.mod} onChange={e => set(r.k, "mod")(e.target.value)} placeholder="Eg. Checkout" /></div>
+              <div className="f"><label htmlFor={`sb-s${r.k}`}>Severity</label>
+                <select id={`sb-s${r.k}`} value={r.sev} onChange={e => set(r.k, "sev")(e.target.value)}>{["High", "Medium", "Low"].map(x => <option key={x}>{x}</option>)}</select></div>
+              <div className="f"><label htmlFor={`sb-h${r.k}`}>Time spent</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id={`sb-h${r.k}`} type="number" min="0" step={r.unit === "h" ? "0.25" : "5"} value={r.t} onChange={e => set(r.k, "t")(e.target.value)} placeholder={r.unit === "h" ? "1" : "30"} style={{ flex: 1, minWidth: 0 }} />
+                  <select aria-label="Unit" value={r.unit} onChange={e => set(r.k, "unit")(e.target.value)} style={{ width: 92 }}><option value="min">minutes</option><option value="h">hours</option></select>
+                </div></div>
+            </div>
+            <div className="f"><label htmlFor={`sb-st${r.k}`}>Steps to reproduce</label><textarea id={`sb-st${r.k}`} rows={2} value={r.steps} onChange={e => set(r.k, "steps")(e.target.value)} /></div>
+            <div className="f"><label htmlFor={`sb-u${r.k}`}>Page or video link (optional)</label><input id={`sb-u${r.k}`} value={r.url} onChange={e => set(r.k, "url")(e.target.value)} /></div>
+            <FilePick id={`sb-f${r.k}`} files={r.files} onChange={set(r.k, "files")} />
+          </div>
+        </section>
+      ))}
+      <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 20 }}>
+        <button type="button" className="btn" onClick={() => setRows(L => [...L, newRow()])}>+ Add another bug</button>
+        <span className="sub" style={{ flex: 1 }}>{filled.length} bug{filled.length === 1 ? "" : "s"}{total ? ` · ${fmtMins(total)} on your timesheet` : ""}</span>
+        <button className="btn p lg" disabled={busy || !dev}>{busy ? "Sending…" : `Send ${filled.length || ""} bug${filled.length === 1 ? "" : "s"}`}</button>
+      </div>
+    </form>
+  );
+}
+
 function Bugs() {
   const P = usePortal();
   const tester = P.session.user.role === "test";
+  const [tab, setTab] = useState("list");
   const B = useGet("/bugs");
   const Act = useGet("/bugs/activity");
-  const [fix, setFix] = useState(null);
-  const [reopen, setReopen] = useState(null);
+  const [viewId, setViewId] = useState(null);
   const all = (B.data || []).slice().sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1));
+  const view = all.find(b => b._id === viewId) || Act.data?.bugs.find(b => b._id === viewId) || null;
+  const reload = B.reload, reloadAct = Act.reload;
+  // Keep the open bug and the counts fresh while the page is open
+  useEffect(() => { const t = setInterval(() => { reload(); reloadAct(); }, 20000); return () => clearInterval(t); }, [reload, reloadAct]);
   const act = async (id, body, ok) => {
     try { await api(`/bugs/${id}`, { method: "PATCH", body }); toast(ok); B.reload(); Act.reload(); P.refresh(); return true; }
     catch (ex) { toast(ex.message); return false; }
   };
   const open = all.filter(b => ["open", "reopened"].includes(b.meta?.status));
+  const working = all.filter(b => ["progress", "info"].includes(b.meta?.status));
   const fixed = all.filter(b => b.meta?.status === "fixed");
+  const notbug = all.filter(b => b.meta?.status === "notbug");
   const done = all.filter(b => b.meta?.status === "verified").slice(0, 15);
+  const li = (b, extra) => <BugLi key={b._id} b={b} onOpen={(x) => setViewId(x._id)}>{extra}</BugLi>;
+  const list = (L, empty) => (L.length ? L.map(b => li(b)) : <div className="empty">{B.loading ? "Loading…" : empty}</div>);
   return (
     <>
       <h2 className="t">{tester ? "Bugs" : "My bugs"}<span>.</span></h2>
-      <p className="lead">{tester ? "Bugs you raised. When a developer marks one fixed, verify it or reopen it." : "Bugs testers assigned to you, highest priority first. Mark them fixed with the commit link and the tester gets them back to verify."}</p>
-      {tester && <div className="row" style={{ marginBottom: 14 }}><Link className="btn p" to="/log">+ Raise a bug</Link></div>}
+      <p className="lead">{tester ? "Send bugs to a developer, with screenshots, documents and the time you spent. Follow their status and comments here, then verify or reopen." : "Bugs testers sent you, highest priority first. Open one to see the screenshots, change its status and reply to the tester."}</p>
+      {tester && (
+        <div className="seg" style={{ maxWidth: 420 }}>
+          <button type="button" className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>My bugs ({all.length})</button>
+          <button type="button" className={tab === "send" ? "on" : ""} onClick={() => setTab("send")}>Send bugs</button>
+        </div>
+      )}
       {B.err && <div className="alert am">{B.err}</div>}
-      {tester ? (
+      {tester && tab === "send" ? <SendBugs onSent={() => { setTab("list"); B.reload(); }} /> : (
         <>
-          <section className="card"><h3>Fixed, waiting for you <small>{fixed.length}</small></h3>
-            {fixed.length ? fixed.map(b => (
-              <BugLi key={b._id} b={b}>
-                <button type="button" className="btn sm" onClick={() => setReopen(b)}>Reopen</button>
-                <button type="button" className="btn sm p" onClick={() => act(b._id, { action: "verify" }, "Bug verified")}>Verified</button>
-              </BugLi>
-            )) : <div className="empty">{B.loading ? "Loading…" : "Nothing to verify."}</div>}</section>
-          <section className="card"><h3>Still open <small>{open.length}</small></h3>
-            {open.length ? open.map(b => <BugLi key={b._id} b={b} />) : <div className="empty">No open bugs.</div>}</section>
-        </>
-      ) : (
-        <>
-          <section className="card"><h3>To fix <small>{open.length}</small></h3>
-            {open.length ? open.map(b => (
-              <BugLi key={b._id} b={b}><button type="button" className="btn sm p" onClick={() => setFix(b)}>Mark fixed</button></BugLi>
-            )) : <div className="empty">{B.loading ? "Loading…" : "No bugs assigned to you."}</div>}</section>
-          <section className="card"><h3>Fixed, with the tester <small>{fixed.length}</small></h3>
-            {fixed.length ? fixed.map(b => <BugLi key={b._id} b={b} />) : <div className="empty">None.</div>}</section>
-        </>
-      )}
-      <section className="card"><h3>Recently verified</h3>
-        {done.length ? done.map(b => <BugLi key={b._id} b={b} />) : <div className="empty">None.</div>}</section>
+          {tester ? (
+            <>
+              <section className="card"><h3>Fixed, waiting for you <small>{fixed.length + notbug.length}</small></h3>
+                {fixed.length + notbug.length ? [...fixed, ...notbug].map(b => li(b, b.meta?.status === "fixed" &&
+                  <button type="button" className="btn sm p" onClick={() => act(b._id, { action: "verify" }, "Bug verified")}>Verified</button>))
+                  : <div className="empty">{B.loading ? "Loading…" : "Nothing to verify."}</div>}</section>
+              <section className="card"><h3>Developer working on it <small>{working.length}</small></h3>{list(working, "None.")}</section>
+              <section className="card"><h3>Still open <small>{open.length}</small></h3>{list(open, "No open bugs.")}</section>
+            </>
+          ) : (
+            <>
+              <section className="card"><h3>To fix <small>{open.length}</small></h3>{list(open, "No new bugs for you.")}</section>
+              <section className="card"><h3>In progress or waiting for info <small>{working.length}</small></h3>{list(working, "None.")}</section>
+              <section className="card"><h3>Fixed, with the tester <small>{fixed.length + notbug.length}</small></h3>{list([...fixed, ...notbug], "None.")}</section>
+            </>
+          )}
+          <section className="card"><h3>Recently verified</h3>{list(done, "None.")}</section>
 
-      <section className="card"><h3>{tester ? "Test runs" : "Test runs on my projects"} <small>{Act.data?.tests.length || 0}</small></h3>
-        {Act.data?.tests.length ? Act.data.tests.map(t => <TestLi key={t._id} t={t} />)
-          : <div className="empty">{Act.loading ? "Loading…" : tester ? "Log a test run from Log work." : "No test runs on your projects yet."}</div>}</section>
-      {!tester && (
-        <section className="card"><h3>Other bugs on my projects <small>{Act.data?.bugs.length || 0}</small></h3>
-          {Act.data?.bugs.length ? Act.data.bugs.map(b => <BugLi key={b._id} b={b} />)
-            : <div className="empty">{Act.loading ? "Loading…" : "No bugs raised for your teammates on these projects."}</div>}</section>
+          <section className="card"><h3>{tester ? "Test runs" : "Test runs on my projects"} <small>{Act.data?.tests.length || 0}</small></h3>
+            {Act.data?.tests.length ? Act.data.tests.map(t => <TestLi key={t._id} t={t} />)
+              : <div className="empty">{Act.loading ? "Loading…" : tester ? "Log a test run from Log work." : "No test runs on your projects yet."}</div>}</section>
+          {!tester && (
+            <section className="card"><h3>Other bugs on my projects <small>{Act.data?.bugs.length || 0}</small></h3>
+              {Act.data?.bugs.length ? Act.data.bugs.map(b => <BugLi key={b._id} b={b} />)
+                : <div className="empty">{Act.loading ? "Loading…" : "No bugs raised for your teammates on these projects."}</div>}</section>
+          )}
+        </>
       )}
 
-      {fix && (
-        <Modal title={`Mark ${fix.meta?.bug} fixed`} onClose={() => setFix(null)}>
-          <form onSubmit={async (ev) => {
-            ev.preventDefault(); const d = Object.fromEntries(new FormData(ev.target));
-            const u = d.url ? (/^https?:/.test(d.url) ? d.url : `https://${d.url}`) : "";
-            if (await act(fix._id, { action: "fix", url: u, hrs: +d.hrs || 0, note: d.note, date: today() }, "Sent back to the tester")) setFix(null);
-          }}>
-            <p className="sub" style={{ marginTop: 0 }}>{fix.title}</p>
-            <div className="f"><label htmlFor="fx1">Commit link for the fix</label><input id="fx1" name="url" type="text" /></div>
-            <div className="g2">
-              <div className="f"><label htmlFor="fx2">Time spent (hours)</label><input id="fx2" name="hrs" type="number" min="0" step="0.25" defaultValue="0.5" /></div>
-              <div className="f"><label htmlFor="fx3">Note for the tester</label><input id="fx3" name="note" type="text" /></div>
-            </div>
-            <button className="btn p">Mark fixed</button>
-          </form>
-        </Modal>
-      )}
-      {reopen && (
-        <Modal title={`Reopen ${reopen.meta?.bug}`} onClose={() => setReopen(null)}>
-          <form onSubmit={async (ev) => { ev.preventDefault(); if (await act(reopen._id, { action: "reopen", note: new FormData(ev.target).get("note") }, "Bug reopened")) setReopen(null); }}>
-            <div className="f"><label htmlFor="ro">What is still wrong?</label><textarea id="ro" name="note" rows={3} required /></div>
-            <button className="btn w">Reopen</button>
-          </form>
-        </Modal>
-      )}
+      {view && <BugView key={view._id} bug={view} tester={tester} onClose={() => setViewId(null)} act={act} />}
     </>
   );
 }

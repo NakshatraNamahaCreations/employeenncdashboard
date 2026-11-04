@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Mail, MessageCircle } from "lucide-react";
 import { usePortal } from "../../auth/store";
-import { api } from "../../api";
+import { api, upload, fileUrl } from "../../api";
 import { ROLES } from "../../roles";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
@@ -57,6 +57,11 @@ export default function Meetings() {
   const u = P.session.user, roleL = ROLES[u.role].l;
   const [mid, setMid] = useState("");
   const [shots, setShots] = useState([]);
+  const [files, setFiles] = useState([]);          // MOM and other documents
+  const [full, setFull] = useState("");            // id whose photos are loaded; only then are photos sent on save
+  const [busy, setBusy] = useState(false);
+  const [upBusy, setUpBusy] = useState(0);
+  const savedId = useRef("");                       // a new meeting, once saved, is updated, never created twice
   const m = mid && mid !== "new" ? P.meetings.find(x => x._id === mid) : null;
   const [mom, setMom] = useState("");
   const [wa, setWa] = useState("");
@@ -68,7 +73,10 @@ export default function Meetings() {
 
   const openM = (id) => {
     const x = P.meetings.find(y => y._id === id);
-    setMid(id); setShots(x?.images || []); setMom(x?.momTxt || "");
+    savedId.current = id; setFull("");
+    setMid(id); setShots([]); setFiles(x?.files || []); setMom(x?.momTxt || "");
+    // the list leaves photos out to stay fast; load them for this meeting
+    api(`/meetings/${id}`).then(j => { if (savedId.current === id) { setShots(j.data.images || []); setFiles(j.data.files || []); setFull(id); } }, (e) => toast(e.message));
     setWa(x?.momTxt ? waTpl(x, x.momTxt, u.name) : ""); setMail(x?.momTxt ? mailTpl(x, x.momTxt, u.name, roleL) : "");
     window.scrollTo(0, 0);
   };
@@ -86,16 +94,31 @@ export default function Meetings() {
       img.src = url;
     });
   };
+  const addDocs = async (list) => {
+    const L = [...list];
+    setUpBusy(n => n + L.length);
+    for (const f of L) {
+      if (f.size > 25 * 1024 * 1024) toast(`${f.name} is over 25 MB`);
+      else { try { const d = await upload(f); setFiles(s => [...s, d]); } catch (ex) { toast(ex.message); } }
+      setUpBusy(n => n - 1);
+    }
+  };
   const save = async (e, withMom) => {
     e.preventDefault();
+    if (busy) return;
     const form = e.target.form || e.target;
     if (!form.reportValidity()) return;
     const d = Object.fromEntries(new FormData(form));
-    if (!d.notes.trim() && !shots.length) { toast("Write some notes or attach a photo of the notes"); return; }
-    const rec = { ...(m || {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes: d.notes, images: shots };
+    if (!d.notes.trim() && !shots.length && !files.length) { toast("Write some notes or attach a photo or document"); return; }
+    const id = m?._id || savedId.current;
+    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes: d.notes, files };
+    if (!id || full === id) rec.images = shots;
     if (withMom) rec.momTxt = momText(rec, { name: u.name, role: roleL });
+    setBusy(true);
     const doc = await P.saveMeeting(rec);
+    setBusy(false);
     if (!doc) return;
+    savedId.current = doc._id; setFull(doc._id);
     setMid(doc._id);
     if (withMom) { setMom(rec.momTxt); setWa(waTpl(rec, rec.momTxt, u.name)); setMail(mailTpl(rec, rec.momTxt, u.name, roleL)); toast("Minutes written from your notes. Check them before sending."); }
     else toast("Notes saved");
@@ -116,11 +139,11 @@ export default function Meetings() {
   const list = (
     <section className="card"><h3>My meetings <small>{L.length}</small>
       <input className="r mt-q" type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} aria-label="Search meetings" />
-      <button type="button" className="btn sm p" onClick={() => { setMid("new"); setShots([]); setMom(""); }}>+ New meeting</button></h3>
+      <button type="button" className="btn sm p" onClick={() => { savedId.current = ""; setFull(""); setMid("new"); setShots([]); setFiles([]); setMom(""); }}>+ New meeting</button></h3>
       {shown.length ? shown.map(x => (
         <button key={x._id} type="button" className={`mcard ${mid === x._id ? "on" : ""}`} onClick={() => openM(x._id)}>
           <b style={{ display: "block", color: "var(--navy)", fontWeight: 600 }}>{x.title}</b>
-          <span className="sub">{x.refName || "Internal"} · {fd(x.date)}{x.time ? `, ${ampm(x.time)}` : ""} · {x.mode}{(x.sendLog || []).length ? ` · sent ${x.sendLog.length}×` : ""}</span>{status(x)}
+          <span className="sub">{x.refName || "Internal"} · {fd(x.date)}{x.time ? `, ${ampm(x.time)}` : ""} · {x.mode}{(x.sendLog || []).length ? ` · sent ${x.sendLog.length}×` : ""}{x.files?.length ? ` · ${x.files.length} document${x.files.length > 1 ? "s" : ""}` : ""}</span>{status(x)}
         </button>
       )) : <div className="empty">{L.length ? "No meeting matches." : <>No meetings yet. Tap <b>+ New meeting</b>.</>}</div>}
     </section>
@@ -181,7 +204,17 @@ export default function Meetings() {
             </div>
             <div className="f"><label htmlFor="m8">From NNC</label><input id="m8" name="ours" type="text" defaultValue={m?.ours || u.name} /></div>
             <div className="f"><label htmlFor="m9">Meeting notes</label><textarea id="m9" name="notes" rows={11} defaultValue={m?.notes || ""} placeholder="Write each point on a new line. Who said what, what was decided, who will do what and by when." /></div>
-            <div className="f"><label htmlFor="m10">Photos of written notes, whiteboard or screenshots{shots.length ? ` · ${shots.length} attached` : ""}</label>
+            <div className="f"><label htmlFor="m11">MOM and documents (PDF, Word, Excel, images){files.length ? ` · ${files.length} attached` : ""}</label>
+              <div className="drop">
+                <input id="m11" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={e => { addDocs(e.target.files); e.target.value = ""; }} />
+                {upBusy > 0 && <span className="sub">Uploading {upBusy}…</span>}
+                <div className="mt-docs">{files.map((f, i) => (
+                  <span key={f.url} className="mt-doc"><a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>
+                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(L2 => L2.filter((_, j) => j !== i))}>×</button></span>
+                ))}</div>
+              </div>
+            </div>
+            <div className="f"><label htmlFor="m10">Photos of written notes, whiteboard or screenshots{shots.length ? ` · ${shots.length} attached` : m?.imgCount && full !== m._id ? ` · loading ${m.imgCount}…` : ""}</label>
               <div className="drop">
                 <input id="m10" type="file" accept="image/*" multiple onChange={e => { addShots(e.target.files); e.target.value = ""; }} />
                 <div className="thumbs">{shots.map((s, i) => (
@@ -190,8 +223,8 @@ export default function Meetings() {
               </div>
             </div>
             <div className="row">
-              <button className="btn p lg">{m?.momTxt ? "Save and rewrite the MOM" : "Save and write the MOM"}</button>
-              <button type="button" className="btn lg" onClick={(e) => save(e, false)}>Save notes only</button>
+              <button className="btn p lg" disabled={busy || upBusy > 0}>{busy ? "Saving…" : m?.momTxt ? "Save and rewrite the MOM" : "Save and write the MOM"}</button>
+              <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, false)}>Save notes only</button>
               {m && <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={async () => { if (await confirmBox({ title: "Delete this meeting?", text: "Its notes and minutes are deleted too.", ok: "Delete", danger: true })) { P.removeMeeting(m._id); setMid(""); } }}>Delete</button>}
             </div>
           </form>
@@ -203,7 +236,7 @@ export default function Meetings() {
                 <div className="pad">
                   <div className="alert am">Laid out from your typed notes. Check names, dates and amounts before sending.</div>
                   <textarea className="mom" value={mom} onChange={e => { setMom(e.target.value); setWa(waTpl(m, e.target.value, u.name)); setMail(mailTpl(m, e.target.value, u.name, roleL)); }} aria-label="Minutes of meeting" />
-                  <div className="row" style={{ marginTop: 10 }}><button type="button" className="btn p" onClick={async () => { if (await P.saveMeeting({ ...m, momTxt: mom })) toast("Minutes saved"); }}>Save changes</button></div>
+                  <div className="row" style={{ marginTop: 10 }}><button type="button" className="btn p" disabled={busy} onClick={async () => { setBusy(true); const r = await P.saveMeeting({ ...m, files, momTxt: mom }); setBusy(false); if (r) toast("Minutes saved"); }}>Save changes</button></div>
                 </div></section>
               <section className="card"><h3>Send the MOM</h3>
                 <div className="pad">

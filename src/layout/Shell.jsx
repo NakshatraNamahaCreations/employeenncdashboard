@@ -2,13 +2,59 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Sun, PlusCircle, FolderKanban, ListTodo, CalendarDays, Bug, LineChart, PenTool, Wallet, MessagesSquare, Users2, History, UserRound,
-  Bell, LogOut, Menu, CheckCheck, ClipboardList, Megaphone, MessageCircle, BadgeCheck, RotateCcw, Info,
+  Bell, LogOut, Menu, CheckCheck, ClipboardList, Megaphone, MessageCircle, BadgeCheck, RotateCcw, Info, LogIn,
 } from "lucide-react";
 import { usePortal } from "../auth/store";
 import { ROLES, initials } from "../roles";
 import { today } from "../util";
 import { confirmBox } from "../confirm";
 import TeamChat from "../TeamChat";
+import Modal from "../Modal";
+
+const hm = (d) => (d ? new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : "");
+const mins = (L) => L.reduce((a, s) => a + ((s.out ? new Date(s.out) : new Date()) - new Date(s.in)) / 60000, 0);
+const dur = (m) => `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m`;
+
+// Check in / check out in the top bar; asks once when the portal is opened and they have not checked in today
+function CheckInOut() {
+  const { attendance, mark, days } = usePortal();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const L = attendance?.sessions || [];
+  const open = L.find(s => !s.out);
+  useEffect(() => {
+    if (!attendance || L.length) return;
+    const k = `nnc-asked-checkin-${today()}`;
+    try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, "1"); } catch { /* storage blocked */ }
+    queueMicrotask(() => setAsk(true));
+  }, [attendance, L.length]);
+  if (!attendance) return null;
+  const go = async (action) => {
+    if (action === "out" && !days.some(d => d.date === today()) &&
+      !(await confirmBox({ title: "Check out without submitting?", text: "You have not submitted your day yet. You can submit it from Log work before you leave.", ok: "Check out" }))) return;
+    setBusy(true); await mark(action); setBusy(false); setAsk(false);
+  };
+  const first = L[0]?.in, last = [...L].reverse().find(s => s.out)?.out;
+  return (
+    <>
+      <span className={`cio ${open ? "on" : ""}`} title={L.length ? `Worked ${dur(mins(L))} today` : "Not checked in yet"}>
+        {L.length > 0 && <span className="cio-t">In <b>{hm(first)}</b>{!open && last ? <> · Out <b>{hm(last)}</b></> : null}</span>}
+        {open
+          ? <button type="button" className="btn sm" disabled={busy} onClick={() => go("out")}><LogOut size={14} /> Check out</button>
+          : <button type="button" className="btn sm p" disabled={busy} onClick={() => go("in")}><LogIn size={14} /> {L.length ? "Check in again" : "Check in"}</button>}
+      </span>
+      {ask && (
+        <Modal title="Good to see you" onClose={() => setAsk(false)}>
+          <p style={{ marginTop: 0 }}>You have not checked in today. Check in now to record your start time ({hm(new Date())}).</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn p" disabled={busy} onClick={() => go("in")}><LogIn size={15} /> Check in now</button>
+            <button type="button" className="btn" onClick={() => setAsk(false)}>Later</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
 
 const PAGE_IC = { ranks: LineChart, ads: LineChart, designs: PenTool, bugs: Bug, payments: Wallet };
 const N_IC = { task: ClipboardList, bug: Bug, bug_fixed: BadgeCheck, bug_verified: CheckCheck, bug_reopened: RotateCcw, message: MessageCircle, announce: Megaphone };
@@ -91,7 +137,7 @@ export function EmpLayout() {
   return (
     <div className="shell">
       <aside className="nav">
-        <div className="brand"><span className="mk">NNC</span><span>Employee Portal<small>Nakshatra Namaha Creations</small></span></div>
+        <div className="brand"><span className="mk logo"><img src="/nnclogo.png" alt="NNC" /></span><span>Employee Portal<small>Nakshatra Namaha Creations</small></span></div>
         <NavLink to="/profile" className="me" onClick={close}><span className="av" style={{ background: R.c }}>{initials(u.name)}</span><span><b>{u.name}</b><small>{R.l}</small></span></NavLink>
         {groups.map(([g, items]) => (
           <div key={g}>
@@ -114,6 +160,7 @@ export function EmpLayout() {
           <button type="button" className="iconbtn menu" aria-label="Menu" onClick={() => document.body.classList.toggle("navopen")}><Menu size={18} /></button>
           <div className="bar-t"><b>{cur.label}</b><span className="s">{cur.sub}</span></div>
           <span className="r">
+            <CheckInOut />
             <span className="today">{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
             <button type="button" className="iconbtn" aria-label="Messages" onClick={() => nav("/messages")}><MessagesSquare size={18} />{notif.unreadMessages > 0 && <em>{notif.unreadMessages}</em>}</button>
             <Bellbox />

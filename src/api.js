@@ -36,3 +36,21 @@ export async function api(path, { method = "GET", body, token } = {}) {
   }
   return json;
 }
+
+// Upload one file (image, PDF, Word, Excel, zip) → { url, name, type, size }
+export async function upload(file) {
+  const t = readAuth()?.token;
+  const fd = new FormData();
+  fd.append("file", file);
+  let res;
+  try {
+    res = await fetch(`${API}/api/portal/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
+  } catch {
+    throw new Error("Cannot reach the server. Check your internet connection.");
+  }
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401) onExpired();
+  if (!res.ok || json.success === false) throw new Error(json.message || `Upload failed (${res.status})`);
+  return json.data;
+}
+export const fileUrl = (u) => (!u ? "" : /^https?:/.test(u) ? u : `${API}${u.startsWith("/") ? "" : "/"}${u}`);

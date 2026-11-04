@@ -21,7 +21,7 @@ const TIPS = {
   other: ["Use this for anything that does not fit the other types: research, calls, internal work."],
 };
 
-export function DayPanel({ hrs, items, submitted, onSubmit, onLog }) {
+export function DayPanel({ hrs, items, submitted, onSubmit, onLog, extra = 0 }) {
   const steps = [
     { done: items > 0, t: "Log each piece of work", s: items ? `${items} item${items > 1 ? "s" : ""} logged` : "As you finish it, with its link" },
     { done: hrs >= MIN, t: `Reach ${MIN} to ${TARGET} hours`, s: `${h1(hrs)} of ${TARGET} hours` },
@@ -32,12 +32,13 @@ export function DayPanel({ hrs, items, submitted, onSubmit, onLog }) {
     <section className="lw-day">
       <div className="lw-day-l">
         <span className="lw-eyebrow">Today's timesheet</span>
-        <div className="lw-hrs"><b>{h1(hrs)}</b><span>/ {TARGET} hours</span>
+        <div className="lw-hrs"><b>{h1(hrs - extra)}</b><span>/ {TARGET} hours{extra > 0 ? ` + ${h1(extra)} h extra` : ""}</span>
           {submitted ? <span className="pill p-ok"><Lock size={11} /> Submitted</span> : hrs >= MIN ? <span className="pill p-ok">Ready to submit</span> : <span className="pill p-amb">{h1(left)} h to go</span>}</div>
         <div className={`lw-bar ${hrs >= MIN ? "ok" : ""}`}><i style={{ width: `${pct(hrs, TARGET)}%` }} /><em style={{ left: `${(MIN / TARGET) * 100}%` }} /></div>
         <div className="row" style={{ marginTop: 14 }}>
           {!submitted && <button type="button" className="btn p" onClick={onLog}>+ Log work</button>}
           {!submitted && <button type="button" className="btn" disabled={!items} onClick={onSubmit}>Submit my day</button>}
+          {submitted && <button type="button" className="btn p" onClick={onLog}>+ Log extra work</button>}
         </div>
       </div>
       <ol className="lw-steps">
@@ -71,10 +72,12 @@ export function TypeTiles({ types, onPick, disabled }) {
 const at = (d) => (d ? new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : "");
 export function TodaySheet({ list, onDelete, locked }) {
   const total = list.reduce((a, e) => a + (e.hrs || 0), 0);
+  const extra = list.filter(e => e.meta?.extra).reduce((a, e) => a + (e.hrs || 0), 0);
+  const canDel = (e) => !locked || e.meta?.extra;            // extra work stays editable after the day is submitted
   if (!list.length) return <div className="empty">Nothing logged yet today. Pick what you did above and save it with the link and the time it took.</div>;
   return (
     <div className="tw"><table className="lw-sheet">
-      <thead><tr><th>Logged</th><th>Work</th><th>Client or project</th><th>Link</th><th style={{ textAlign: "right" }}>Hours</th>{!locked && <th />}</tr></thead>
+      <thead><tr><th>Logged</th><th>Work</th><th>Client or project</th><th>Link</th><th style={{ textAlign: "right" }}>Hours</th><th /></tr></thead>
       <tbody>
         {list.map(e => {
           const Ic = TY_IC[e.type] || Clock;
@@ -82,16 +85,16 @@ export function TodaySheet({ list, onDelete, locked }) {
             <tr key={e._id}>
               <td className="lw-at">{at(e.createdAt)}</td>
               <td><div className="lw-w"><span className={`lw-ti sm t-${e.type}`}><Ic size={14} /></span>
-                <span><b>{e.title}</b><small>{[TY[e.type]?.l || (e.type === "adsreport" ? "Daily ads report" : e.type), metaTxt(e)].filter(Boolean).join(" · ")}</small></span></div></td>
+                <span><b>{e.title}</b>{e.meta?.extra && <> <span className="pill p-extra">Extra work</span></>}<small>{[TY[e.type]?.l || (e.type === "adsreport" ? "Daily ads report" : e.type), metaTxt(e)].filter(Boolean).join(" · ")}</small></span></div></td>
               <td>{e.refName || <span className="sub">Internal</span>}</td>
               <td>{e.url ? <a className="lw-link" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "").slice(0, 34)} <ExternalLink size={11} /></a> : <span className="sub">-</span>}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{h1(e.hrs)}</td>
-              {!locked && <td style={{ textAlign: "right" }}><button type="button" className="iconbtn sm" aria-label="Delete entry" onClick={() => onDelete(e._id)}><Trash2 size={14} /></button></td>}
+              <td style={{ textAlign: "right" }}>{canDel(e) && <button type="button" className="iconbtn sm" aria-label="Delete entry" onClick={() => onDelete(e._id)}><Trash2 size={14} /></button>}</td>
             </tr>
           );
         })}
       </tbody>
-      <tfoot><tr><td colSpan={4}>Total today</td><td style={{ textAlign: "right" }}>{h1(total)} h</td>{!locked && <td />}</tr></tfoot>
+      <tfoot><tr><td colSpan={4}>Total today{extra > 0 ? ` (${h1(total - extra)} h day + ${h1(extra)} h extra)` : ""}</td><td style={{ textAlign: "right" }}>{h1(total)} h</td><td /></tr></tfoot>
     </table></div>
   );
 }

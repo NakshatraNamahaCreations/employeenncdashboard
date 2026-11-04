@@ -9,7 +9,7 @@ import PwInput from "../../PwInput";
 function Side() {
   return (
     <div className="side">
-      <div className="brand"><span className="mk">NNC</span><span>Nakshatra Namaha Creations<small>Employee Portal</small></span></div>
+      <div className="brand"><span className="mk logo"><img src="/nnclogo.png" alt="NNC" /></span><span>Nakshatra Namaha Creations<small>Employee Portal</small></span></div>
       <h1>Your work, your clients,<br /><span>one login.</span></h1>
       <p>Sign in to log your daily work, update bugs and designs, send client reports and meeting minutes. Everything you update reaches the management dashboard straight away.</p>
       <div className="feat">

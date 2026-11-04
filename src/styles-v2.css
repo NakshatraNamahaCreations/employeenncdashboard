@@ -305,3 +305,45 @@ h2.t { font-size: 26px; letter-spacing: -.2px; }
 .tc-send { background: linear-gradient(135deg, #2563EB, #4F46E5); box-shadow: 0 4px 12px rgba(37, 99, 235, .3); }
 .tc-x { background: linear-gradient(135deg, #1D4ED8, #4F46E5); }
 .tc-say { border: 0; box-shadow: 0 12px 30px rgba(30, 41, 99, .18), 0 0 0 1px rgba(37, 99, 235, .08); }
+
+/* Bugs: attachments, comment thread, batch form */
+.bug-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.bug-files .bf-img { width: 96px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #F8FAFC; }
+.bug-files .bf-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bug-files .bf-doc { display: inline-flex; align-items: center; max-width: 220px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--pri); text-decoration: none; background: #F8FAFC; }
+.bug-files .bf-doc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bug-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bug-pick label.btn { cursor: pointer; }
+.bug-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; font-size: 12px; background: var(--priBg); color: var(--pri); border-radius: 20px; padding: 3px 4px 3px 10px; }
+.bug-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.bug-steps { white-space: pre-wrap; background: #F8FAFC; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; margin: 8px 0; }
+.bug-h { margin: 18px 0 8px; font-size: 14px; }
+.bug-thread { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; margin-bottom: 14px; }
+.bug-c { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; background: #fff; }
+.bug-c.dev { border-left: 3px solid var(--pri); }
+.bug-c.tst { border-left: 3px solid #7C3AED; }
+.bug-c .bc-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.bug-c .bc-h span:last-child { margin-left: auto; color: var(--mut); font-size: 12px; }
+.bug-c .bc-t { white-space: pre-wrap; font-size: 13.5px; margin-top: 4px; }
+.bug-row h3 .r { margin-left: auto; }
+
+/* Check in / check out in the top bar */
+.cio { display: inline-flex; align-items: center; gap: 8px; }
+.cio-t { font-size: 12.5px; color: var(--mut); white-space: nowrap; }
+.cio-t b { color: var(--navy); font-weight: 600; }
+.cio .btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cio.on .cio-t::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: 1px; }
+@media (max-width: 720px) { .cio-t { display: none; } }
+
+/* Extra work logged after the day was submitted */
+.pill.p-extra { background: #FEF3C7; color: #B45309; }
+
+/* NNC logo in the brand tile */
+.mk.logo, aside.nav .mk.logo { background: #fff; padding: 4px; }
+.mk.logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Meeting documents */
+.mt-docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mt-doc { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; font-size: 12.5px; background: var(--priBg); border-radius: 20px; padding: 3px 4px 3px 10px; }
+.mt-doc a { color: var(--pri); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.mt-doc button { border: 0; background: transparent; color: var(--pri); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
