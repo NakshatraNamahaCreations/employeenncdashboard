@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { usePortal } from "../../auth/store";
-import { ROLES } from "../../roles";
+import { ROLES, roleInfo, hasRole } from "../../roles";
 import { api, upload, fileUrl } from "../../api";
 import { toast } from "../../toast";
 import { EntryLi } from "./EmpPages";
@@ -11,8 +11,8 @@ import { today, fd, fdw, greet, rs, monthStart, iso } from "../../util";
 export function RolePage() {
   const { rolePage } = useParams();
   const { session } = usePortal();
-  const R = ROLES[session.user.role];
-  if (rolePage !== R.page[0]) return <Navigate to="/" replace />;
+  const R = roleInfo(session.user);
+  if (!R.pages.some(p => p[0] === rolePage)) return <Navigate to="/" replace />;
   return { ranks: <Ranks />, ads: <AdsReport />, designs: <Designs />, bugs: <Bugs />, payments: <Payments /> }[rolePage];
 }
 
@@ -513,7 +513,7 @@ function SendBugs({ onSent }) {
 
 function Bugs() {
   const P = usePortal();
-  const tester = P.session.user.role === "test";
+  const tester = hasRole(P.session.user, ["test"]);
   const [tab, setTab] = useState("list");
   const B = useGet("/bugs");
   const Act = useGet("/bugs/activity");

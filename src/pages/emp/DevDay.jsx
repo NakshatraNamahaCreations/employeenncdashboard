@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
-import { ROLES, TY } from "../../roles";
+import { roleInfo, TY } from "../../roles";
 import { api } from "../../api";
 import { EntryLi, SubmitDay, Blocked, TaskRef } from "./EmpPages";
 import { ProjectCard } from "./Projects";
@@ -22,7 +22,7 @@ const monthName = (ym) => parse(`${ym}-01`).toLocaleDateString("en-IN", { month:
 
 export default function DevDay() {
   const P = usePortal();
-  const u = P.session.user, R = ROLES[u.role];
+  const u = P.session.user, R = roleInfo(u);
   const nav = useNavigate();
   const [modal, setModal] = useState(null);
   const [ym, setYm] = useState(today().slice(0, 7));

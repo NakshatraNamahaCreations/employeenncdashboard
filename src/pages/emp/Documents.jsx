@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Send } from "lucide-react";
 import { usePortal } from "../../auth/store";
 import { api, fileUrl } from "../../api";
-import { ROLES } from "../../roles";
+import { ROLES, hasRole } from "../../roles";
 import { toast } from "../../toast";
 import { FilePick } from "./RolePages";
 
@@ -79,7 +79,7 @@ function SendForm({ people, me, assigned, onSent }) {
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   // developers first for a tester, then everyone else
-  const sorted = useMemo(() => [...people].sort((a, b) => (me.role === "test" ? (DEV.includes(b.role) - DEV.includes(a.role)) : 0) || a.name.localeCompare(b.name)), [people, me.role]);
+  const sorted = useMemo(() => [...people].sort((a, b) => (hasRole(me, ["test"]) ? (DEV.includes(b.role) - DEV.includes(a.role)) : 0) || a.name.localeCompare(b.name)), [people, me]);
   const submit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));

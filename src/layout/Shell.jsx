@@ -5,7 +5,7 @@ import {
   Bell, LogOut, Menu, CheckCheck, ClipboardList, Megaphone, MessageCircle, BadgeCheck, RotateCcw, Info, LogIn, FileText,
 } from "lucide-react";
 import { usePortal } from "../auth/store";
-import { ROLES, initials } from "../roles";
+import { roleInfo, initials } from "../roles";
 import { today } from "../util";
 import { confirmBox } from "../confirm";
 import TeamChat from "../TeamChat";
@@ -110,11 +110,10 @@ function Bellbox() {
 
 export function EmpLayout() {
   const { session, tasks, meetings, notif, signOut } = usePortal();
-  const u = session.user, R = ROLES[u.role];
+  const u = session.user, R = roleInfo(u);   // all of this person's roles
   const nav = useNavigate();
   const { pathname } = useLocation();
   const dueTasks = tasks.filter(t => t.status !== "done" && t.due <= today()).length;
-  const PIc = PAGE_IC[R.page[0]] || Bug;
   const groups = [
     ["Today", [
       { to: "/", end: true, label: "My day", ic: Sun, sub: "Today's work, tasks and timesheet" },
@@ -122,9 +121,11 @@ export function EmpLayout() {
       { to: "/calendar", label: "Calendar", ic: CalendarDays, sub: "Meetings, deliveries, testing and tasks by date" },
     ]],
     ["My work", [
-      ...(R.pick === "projects" ? [{ to: "/projects", label: "My projects", ic: FolderKanban, sub: "Status, documents, integrations and team for each project" }] : []),
+      ...(R.picks.has("clients") ? [{ to: "/clients", label: "My clients", ic: Users2, sub: "Your clients, their targets and what is done this month" }] : []),
+      ...(R.picks.has("projects") ? [{ to: "/projects", label: "My projects", ic: FolderKanban, sub: "Status, documents, integrations and team for each project" }] : []),
       { to: "/tasks", label: "My tasks", ic: ListTodo, sub: "Tasks assigned to you and your own to-dos", badge: dueTasks },
-      { to: `/${R.page[0]}`, label: R.page[1], ic: PIc, sub: ({ ranks: "Weekly Google positions for agreed keywords", ads: "Daily numbers, search terms and the client message", designs: "Screens and creatives sent to clients", bugs: "Raise, fix and verify bugs", payments: "Invoices and payments received" })[R.page[0]] },
+      // one page for each of their roles (an SEO analyst who also runs Google Ads gets both)
+      ...R.pages.map(pg => ({ to: `/${pg[0]}`, label: pg[1], ic: PAGE_IC[pg[0]] || Bug, sub: ({ ranks: "Weekly Google positions for agreed keywords", ads: "Daily numbers, search terms and the client message", designs: "Screens and creatives sent to clients", bugs: "Raise, fix and verify bugs", payments: "Invoices and payments received" })[pg[0]] })),
       { to: "/documents", label: "Documents", ic: FileText, sub: "Send and receive files with a message, like test reports for a developer" },
       { to: "/meetings", label: "Meetings and MOM", ic: Users2, sub: "Meeting notes, minutes and what was sent", badge: meetings.filter(m => !m.momTxt).length },
       { to: "/history", label: "My history", ic: History, sub: "Everything you logged, day by day" },

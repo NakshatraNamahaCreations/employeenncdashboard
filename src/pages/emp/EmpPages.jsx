@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
-import { ROLES, TY, typesFor, metaTxt } from "../../roles";
+import { ROLES, TY, typesFor, metaTxt, roleInfo, rolesOf, hasRole } from "../../roles";
 import { api } from "../../api";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
@@ -33,7 +33,7 @@ export function EntryLi({ e, onDelete }) {
 export function TaskRef({ t, empty }) {
   const P = usePortal();
   if (!t.refName) return empty;
-  const mine = t.refId && P.assigned.projects.some(p => p.id === String(t.refId)) && ROLES[P.session.user.role]?.pick === "projects";
+  const mine = t.refId && P.assigned.projects.some(p => p.id === String(t.refId)) && roleInfo(P.session.user).picks.has("projects");
   return mine ? <Link to={`/projects/${t.refId}`}>{t.refName}</Link> : t.refName;
 }
 
@@ -83,18 +83,18 @@ function WeekStrip({ entries, days }) {
 const DEV_ROLES = ["full", "web", "back", "app", "other"];
 export function MyDay() {
   const { session } = usePortal();
-  return DEV_ROLES.includes(session.user.role) ? <DevDay /> : <StdDay />;
+  return hasRole(session.user, DEV_ROLES) ? <DevDay /> : <StdDay />;
 }
 
 function StdDay() {
   const P = usePortal();
-  const u = P.session.user, R = ROLES[u.role];
+  const u = P.session.user, R = roleInfo(u);
   const L = P.entries.filter(e => e.date === today());
   const h = hoursOn(P.entries, today());
   const rec = P.days.find(d => d.date === today());
   const due = P.tasks.filter(t => t.status !== "done" && t.due <= today());
   const bl = P.blockers.filter(b => !b.resolved);
-  const mine = R.pick === "clients" ? P.assigned.clients : P.assigned.projects;
+  const mine = [...(R.picks.has("clients") ? P.assigned.clients : []), ...(R.picks.has("projects") || !R.picks.size ? P.assigned.projects : [])];
   const [modal, setModal] = useState(null);
   const nav = useNavigate();
   return (
@@ -230,7 +230,7 @@ const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "p
 
 export function LogWork() {
   const P = usePortal();
-  const role = P.session.user.role;
+  const roles = rolesOf(P.session.user), picks = roleInfo(P.session.user).picks;
   const [type, setType] = useState("");
   const [devs, setDevs] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -243,7 +243,7 @@ export function LogWork() {
     if (k === "bug") api("/developers").then(j => setDevs(j.data)).catch(() => setDevs([]));
     setType(k);
   };
-  const onClients = !!TY[type]?.c && ROLES[role].pick === "clients";
+  const onClients = !!TY[type]?.c && picks.has("clients");
   const refs = onClients ? P.assigned.clients.map(c => ["client", c]) : P.assigned.projects.map(p => ["project", p]);
   const both = ["meeting", "other"].includes(type) ? [...P.assigned.clients.map(c => ["client", c]), ...P.assigned.projects.map(p => ["project", p])] : refs;
 
@@ -287,7 +287,7 @@ export function LogWork() {
       <DayPanel hrs={hToday} extra={todayL.filter(e => e.meta?.extra).reduce((a, e) => a + (e.hrs || 0), 0)} items={todayL.length} submitted={rec} onSubmit={() => setSubmitting(true)} onLog={() => document.getElementById("lw-types")?.scrollIntoView({ behavior: "smooth" })} />
       {locked && <div className="alert ok">Today is submitted. Anything you log for today now is saved as <b>extra work</b>, on top of your day.</div>}
       <section className="card" id="lw-types"><h3>What did you work on? <small>pick one to log it</small></h3>
-        <div className="pad"><TypeTiles types={typesFor(role)} onPick={pickType} /></div>
+        <div className="pad"><TypeTiles types={typesFor(roles)} onPick={pickType} /></div>
       </section>
       <section className="card"><h3>Today's entries <small>{todayL.length} items · {h1(hToday)} hours</small>
         {!locked && todayL.length > 0 && <button type="button" className="btn sm p r" onClick={() => setSubmitting(true)}>Submit my day</button>}</h3>
@@ -432,7 +432,7 @@ export function MyHistory() {
 /* ───────── My profile ───────── */
 export function Profile() {
   const P = usePortal();
-  const u = P.session.user, R = ROLES[u.role];
+  const u = P.session.user, R = roleInfo(u);
   const save = (e) => { e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)); P.updateMe({ name: d.name.trim(), phone: d.phone.trim() }); };
   const pw = async (e) => {
     e.preventDefault();

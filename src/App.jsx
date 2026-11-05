@@ -9,6 +9,7 @@ import { ProjectsPage, ProjectDetail } from "./pages/emp/Projects";
 import Calendar from "./pages/emp/Calendar";
 import Messages from "./pages/emp/Messages";
 import Documents from "./pages/emp/Documents";
+import MyClients from "./pages/emp/MyClients";
 
 export default function App() {
   const { session } = usePortal();
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="calendar" element={<Calendar />} />
         <Route path="messages" element={<Messages />} />
         <Route path="documents" element={<Documents />} />
+        <Route path="clients" element={<MyClients />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="history" element={<MyHistory />} />

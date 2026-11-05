@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Mail, MessageCircle } from "lucide-react";
 import { usePortal } from "../../auth/store";
 import { api, upload, fileUrl } from "../../api";
-import { ROLES } from "../../roles";
+import { roleInfo } from "../../roles";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
 import { today, fd, fdw, ampm, greet } from "../../util";
@@ -88,7 +88,7 @@ function SendLi({ l, m, onOpen }) {
 
 export default function Meetings() {
   const P = usePortal();
-  const u = P.session.user, roleL = ROLES[u.role].l;
+  const u = P.session.user, roleL = roleInfo(u).l;
   const [mid, setMid] = useState("");
   const [shots, setShots] = useState([]);
   const [files, setFiles] = useState([]);          // MOM and other documents

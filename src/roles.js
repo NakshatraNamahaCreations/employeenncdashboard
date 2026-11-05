@@ -45,7 +45,27 @@ export const TY = {
   other:    { l: "Other work",          h: "Anything else you worked on",              r: ALL },
 };
 
-export const typesFor = (role) => Object.entries(TY).filter(([, t]) => t.r.includes(role));
+// Work types for one role or for all of a person's roles
+export const typesFor = (role) => { const R = Array.isArray(role) ? role : [role]; return Object.entries(TY).filter(([, t]) => t.r.some(x => R.includes(x))); };
+
+// Every role a person has (main role first, then the extra roles the admin gave them)
+export const rolesOf = (u) => [...new Set([u?.role, ...(u?.roles || [])].filter(r => ROLES[r]))];
+export const hasRole = (u, list) => rolesOf(u).some(r => list.includes(r));
+
+// One view of all of someone's roles: names, departments, the pages they get and what they work on
+export function roleInfo(u) {
+  const R = rolesOf(u), main = ROLES[R[0]] || ROLES.other;
+  const pages = [];
+  R.forEach(r => { const p = ROLES[r].page; if (!pages.some(x => x[0] === p[0])) pages.push(p); });
+  const picks = new Set(R.map(r => ROLES[r].pick).filter(Boolean));
+  return {
+    roles: R, c: main.c,
+    l: R.map(r => ROLES[r].l).join(" · "),
+    dept: [...new Set(R.map(r => ROLES[r].dept))].join(" · "),
+    pages, page: pages[0] || main.page,
+    picks, pick: picks.has("projects") ? "projects" : picks.has("clients") ? "clients" : null,
+  };
+}
 
 export const initials = (n) => String(n || "?").split(/\s+/).filter(Boolean).map(x => x[0]).join("").slice(0, 2).toUpperCase();
 
