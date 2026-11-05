@@ -292,7 +292,7 @@ function Files({ list }) {
 }
 
 // Choose files; each one uploads straight away
-function FilePick({ files, onChange, id }) {
+export function FilePick({ files, onChange, id }) {
   const [busy, setBusy] = useState(0);
   const pick = async (e) => {
     const L = [...e.target.files]; e.target.value = "";

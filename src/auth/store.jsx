@@ -5,6 +5,7 @@ import { api, readAuth, writeAuth, setOnExpired } from "../api";
 import { toast } from "../toast";
 import { T, today, nowHM } from "../util";
 import { useRise } from "../ding";
+import { useLive } from "../live";
 
 const Ctx = createContext(null);
 export const usePortal = () => useContext(Ctx);
@@ -57,6 +58,7 @@ export function PortalProvider({ children }) {
     const t = setInterval(loadNotifs, 15000);
     return () => clearInterval(t);
   }, [loadNotifs, session?.token]);
+  useLive("pm", loadNotifs);                  // a message from the admin: update the bell and badge straight away
   const readNotifs = useCallback(async (ids) => {
     setNotif(n => {
       const list = ids ? n.list.filter(x => !ids.includes(x._id)) : [];
@@ -80,7 +82,12 @@ export function PortalProvider({ children }) {
     setTaskStatus: (id, status) => run(() => api(`/tasks/${id}`, { method: "PATCH", body: { status } }), status === "done" ? "Task done" : "Task started"),
     addBlocker: (b) => run(() => api("/blockers", { method: "POST", body: { ...b, date: today() } }), "Sent to Harish"),
     resolveBlocker: (id) => run(() => api(`/blockers/${id}/resolve`, { method: "PATCH" }), "Marked as sorted"),
-    submitDay: (d) => run(() => api("/days", { method: "POST", body: { ...d, date: today(), at: nowHM() } }), "Day submitted to Harish"),
+    // Submitting the day also checks the employee out (the server closes today's check in)
+    submitDay: (d) => run(async () => {
+      const j = await api("/days", { method: "POST", body: { ...d, date: today(), at: nowHM() } });
+      if (j.attendance) setAttendance(j.attendance);
+      return j;
+    }, "Day submitted to Harish"),
     saveMeeting: async (m) => {
       try {
         const r = await api(m._id ? `/meetings/${m._id}` : "/meetings", { method: m._id ? "PUT" : "POST", body: m });

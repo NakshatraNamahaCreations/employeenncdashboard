@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { toast } from "../../toast";
 import { fdw } from "../../util";
 import { useNewMessage } from "../../ding";
+import { useLive, every } from "../../live";
 
 const mine = (m) => m.from !== "admin";
 
@@ -31,17 +32,32 @@ export default function Messages() {
       e => { if (live) { setList(l => l || []); toast(e.message); } },
     );
     load();
-    const t = setInterval(load, 2500);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(2500, load);
+    return () => { live = false; stop(); };
   }, [n, loadNotifs]);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [list]);
+  // the admin wrote (or another tab of mine sent): reload straight away
+  useLive("pm", () => setN(x => x + 1));
+  // Scroll only the message box, and only for a new message or when already at the bottom (so older messages can be read)
+  const lastSeen = useRef("");
+  useEffect(() => {
+    const b = end.current;
+    if (!b || !list) return;
+    const last = list[list.length - 1]?._id || "";
+    if (last !== lastSeen.current || b.scrollHeight - b.scrollTop - b.clientHeight < 80) b.scrollTop = b.scrollHeight;
+    lastSeen.current = last;
+  }, [list]);
 
+  // The message shows straight away; it is swapped for the saved one when the server answers
   const send = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    setBusy(true);
-    try { await api("/messages", { method: "POST", body: { text: text.trim(), refName: ref } }); setText(""); setRef(""); setN(x => x + 1); }
-    catch (ex) { toast(ex.message); }
+    const t = text.trim();
+    if (!t) return;
+    const tmp = { _id: `tmp-${Date.now()}`, from: "emp", text: t, refName: ref, createdAt: new Date().toISOString(), pending: true };
+    setList(L => [...(L || []), tmp]); setText(""); setRef(""); setBusy(true);
+    try {
+      const j = await api("/messages", { method: "POST", body: { text: t, refName: tmp.refName } });
+      setList(L => (L || []).map(m => (m._id === tmp._id ? j.data : m)));
+    } catch (ex) { setList(L => (L || []).filter(m => m._id !== tmp._id)); setText(t); toast(ex.message); }
     finally { setBusy(false); }
   };
   const L = list || [];
@@ -53,7 +69,7 @@ export default function Messages() {
       <section className="card chat">
         <div className="chat-h"><span className="av" style={{ background: "#0F172A" }}><ShieldCheck size={17} /></span>
           <span><b>NNC Admin</b><span className="sub">Harish and the management team</span></span></div>
-        <div className="chat-b">
+        <div className="chat-b" ref={end}>
           {list == null ? <div className="empty">Loading…</div> : !L.length ? <div className="empty">No messages yet. Send the first one below.</div> : L.map((m, i) => (
             <div key={m._id}>
               {(i === 0 || dk(L[i - 1].createdAt) !== dk(m.createdAt)) && <div className="chat-day"><span>{fdw(dk(m.createdAt))}</span></div>}
@@ -62,12 +78,11 @@ export default function Messages() {
                   {m.from === "admin" && <b className="who">{m.by || "Admin"}</b>}
                   {m.refName && <span className="about">About {m.refName}</span>}
                   <span className="txt">{m.text}</span>
-                  <small>{tm(m.createdAt)}{m.from === "emp" ? (m.readAdmin ? " · seen" : " · sent") : ""}</small>
+                  <small>{m.pending ? "sending…" : <>{tm(m.createdAt)}{m.from === "emp" ? (m.readAdmin ? " · seen" : " · sent") : ""}</>}</small>
                 </div>
               </div>
             </div>
           ))}
-          <div ref={end} />
         </div>
         <form className="chat-f" onSubmit={send}>
           {refs.length > 0 && (

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Sun, PlusCircle, FolderKanban, ListTodo, CalendarDays, Bug, LineChart, PenTool, Wallet, MessagesSquare, Users2, History, UserRound,
-  Bell, LogOut, Menu, CheckCheck, ClipboardList, Megaphone, MessageCircle, BadgeCheck, RotateCcw, Info, LogIn,
+  Bell, LogOut, Menu, CheckCheck, ClipboardList, Megaphone, MessageCircle, BadgeCheck, RotateCcw, Info, LogIn, FileText,
 } from "lucide-react";
 import { usePortal } from "../auth/store";
 import { ROLES, initials } from "../roles";
@@ -39,9 +39,12 @@ function CheckInOut() {
     <>
       <span className={`cio ${open ? "on" : ""}`} title={L.length ? `Worked ${dur(mins(L))} today` : "Not checked in yet"}>
         {L.length > 0 && <span className="cio-t">In <b>{hm(first)}</b>{!open && last ? <> · Out <b>{hm(last)}</b></> : null}</span>}
+        {/* one check in and one check out per day; after check out the day is closed */}
         {open
           ? <button type="button" className="btn sm" disabled={busy} onClick={() => go("out")}><LogOut size={14} /> Check out</button>
-          : <button type="button" className="btn sm p" disabled={busy} onClick={() => go("in")}><LogIn size={14} /> {L.length ? "Check in again" : "Check in"}</button>}
+          : L.length
+            ? <span className="pill p-gr">Day closed</span>
+            : <button type="button" className="btn sm p" disabled={busy} onClick={() => go("in")}><LogIn size={14} /> Check in</button>}
       </span>
       {ask && (
         <Modal title="Good to see you" onClose={() => setAsk(false)}>
@@ -57,7 +60,7 @@ function CheckInOut() {
 }
 
 const PAGE_IC = { ranks: LineChart, ads: LineChart, designs: PenTool, bugs: Bug, payments: Wallet };
-const N_IC = { task: ClipboardList, bug: Bug, bug_fixed: BadgeCheck, bug_verified: CheckCheck, bug_reopened: RotateCcw, message: MessageCircle, announce: Megaphone };
+const N_IC = { task: ClipboardList, bug: Bug, bug_fixed: BadgeCheck, bug_verified: CheckCheck, bug_reopened: RotateCcw, message: MessageCircle, announce: Megaphone, doc: FileText };
 const ago = (d) => {
   const s = (Date.now() - new Date(d)) / 1000;
   if (s < 60) return "just now";
@@ -122,6 +125,7 @@ export function EmpLayout() {
       ...(R.pick === "projects" ? [{ to: "/projects", label: "My projects", ic: FolderKanban, sub: "Status, documents, integrations and team for each project" }] : []),
       { to: "/tasks", label: "My tasks", ic: ListTodo, sub: "Tasks assigned to you and your own to-dos", badge: dueTasks },
       { to: `/${R.page[0]}`, label: R.page[1], ic: PIc, sub: ({ ranks: "Weekly Google positions for agreed keywords", ads: "Daily numbers, search terms and the client message", designs: "Screens and creatives sent to clients", bugs: "Raise, fix and verify bugs", payments: "Invoices and payments received" })[R.page[0]] },
+      { to: "/documents", label: "Documents", ic: FileText, sub: "Send and receive files with a message, like test reports for a developer" },
       { to: "/meetings", label: "Meetings and MOM", ic: Users2, sub: "Meeting notes, minutes and what was sent", badge: meetings.filter(m => !m.momTxt).length },
       { to: "/history", label: "My history", ic: History, sub: "Everything you logged, day by day" },
     ]],

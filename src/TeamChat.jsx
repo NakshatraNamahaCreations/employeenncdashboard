@@ -6,6 +6,7 @@ import { api } from "./api";
 import { ROLES, initials } from "./roles";
 import { toast } from "./toast";
 import { useRise, useNewMessage } from "./ding";
+import { useLive, every } from "./live";
 
 const mine = (m) => m.mine;
 
@@ -46,25 +47,32 @@ export default function TeamChat() {
     let live = true;
     const load = () => api("/team/channels").then(j => { if (live) { setChans(j.data); setUnread(j.unread); } }, () => {});
     load();
-    const t = setInterval(load, open ? 3000 : 8000);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(open ? 3000 : 8000, load);
+    return () => { live = false; stop(); };
   }, [open, tick]);
   useEffect(() => {
     if (!cur) return undefined;
     let live = true;
     const load = () => api(`/team/messages?channel=${encodeURIComponent(cur.id)}`).then(j => live && setMsgs(j.data), () => {});
     load();
-    const t = setInterval(load, 2000);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(2000, load);
+    return () => { live = false; stop(); };
   }, [cur, tick]);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs.length, cur]);
+  // a new team message anywhere I can read: reload straight away
+  useLive("team", () => setTick(x => x + 1));
+  useEffect(() => { const b = end.current?.parentElement; if (b) b.scrollTop = b.scrollHeight; }, [msgs.length, cur]);
 
+  // The message shows straight away; it is swapped for the saved one when the server answers
   const send = async (e) => {
     e.preventDefault();
-    if (!text.trim() || !cur) return;
-    setBusy(true);
-    try { await api("/team/messages", { method: "POST", body: { channel: cur.id, text: text.trim() } }); setText(""); setTick(x => x + 1); }
-    catch (ex) { toast(ex.message); }
+    const t = text.trim();
+    if (!t || !cur) return;
+    const tmp = { _id: `tmp-${Date.now()}`, mine: true, who: "me", name: session?.user?.name, text: t, createdAt: new Date().toISOString(), pending: true };
+    setMsgs(L => [...L, tmp]); setText(""); setBusy(true);
+    try {
+      const j = await api("/team/messages", { method: "POST", body: { channel: cur.id, text: t } });
+      setMsgs(L => L.map(m => (m._id === tmp._id ? j.data : m)));
+    } catch (ex) { setMsgs(L => L.filter(m => m._id !== tmp._id)); setText(t); toast(ex.message); }
     finally { setBusy(false); }
   };
   const pick = (c) => { setMsgs([]); setCur(c); };
@@ -110,7 +118,7 @@ export default function TeamChat() {
                       <div className="tc-bub">
                         {first && !m.mine && cur.kind === "group" && <b className="tc-who">{m.name} <span>{roleL(m.role)}</span></b>}
                         <span className="tc-txt">{m.text}</span>
-                        <small>{tm(m.createdAt)}</small>
+                        <small>{m.pending ? "sending…" : tm(m.createdAt)}</small>
                       </div>
                     </div>
                   );

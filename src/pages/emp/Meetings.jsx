@@ -35,7 +35,41 @@ function momText(m, by) {
   return o.join("\n");
 }
 const waTpl = (m, txt, me) => `${greet()},\n\nThank you for your time today. Here are the minutes of our meeting on ${fdw(m.date)}:\n\n${txt}\n\nPlease let us know if we have missed or misunderstood anything.\n\nRegards,\n${me}\nNakshatra Namaha Creations`;
-const mailTpl = (m, txt, me, role) => `Dear Sir/Madam,\n\nThank you for meeting with us on ${fdw(m.date)}. Please find the minutes of the meeting below.\n\n${txt}\n\nKindly review and reply to this email if anything needs to be corrected or added. We will go ahead with the action items as listed.\n\nWarm regards,\n${me}\n${role}, Nakshatra Namaha Creations Pvt Ltd\ninfo@nakshatranamahacreations.com | nakshatranamahacreations.com`;
+
+/* Ready messages to the client: email (sent from the server with the meeting card on top) and WhatsApp */
+const first = (m) => (String(m.theirs || "").split(/[,&]/)[0].trim() || "Sir/Madam");
+const when = (m) => `${fdw(m.date)}${m.time ? `, ${ampm(m.time)}` : ""}`;
+// the lines under "Action items" in the minutes
+const actionsOf = (mom) => {
+  const L = String(mom || "").split(/\r?\n/);
+  const i = L.findIndex(l => /^action items$/i.test(l.trim()));
+  if (i < 0) return [];
+  const out = [];
+  for (const l of L.slice(i + 1)) { if (!/^\s*(\d+[.)]|•)/.test(l)) break; out.push(l.trim()); }
+  return out;
+};
+const TEMPLATES = [
+  { k: "invite", l: "Meeting invite",
+    sub: (m) => `Meeting invite: ${m.title}, ${when(m)}`,
+    mail: (m, me) => `Dear ${first(m)},\n\nThank you for your time. This is to confirm our meeting on ${when(m)} (${m.mode}).\n\nAgenda\n• ${m.title}${m.notes ? `\n${m.notes.split(/\r?\n/).filter(Boolean).slice(0, 6).map(x => `• ${x}`).join("\n")}` : ""}\n\n${m.link ? `Please join using the button above, or this link: ${m.link}\n\n` : ""}If this time does not work for you, just reply to this email and we will find another slot.\n\nWarm regards,\n${me.name}\n${me.role}, Nakshatra Namaha Creations`,
+    wa: (m, me) => `${greet()} ${first(m)},\n\nConfirming our meeting on *${when(m)}* (${m.mode}) about *${m.title}*.${m.link ? `\n\nJoin here: ${m.link}` : ""}\n\nPlease let me know if the time needs to change.\n\n${me.name}, Nakshatra Namaha Creations` },
+  { k: "reminder", l: "Reminder",
+    sub: (m) => `Reminder: ${m.title}, ${when(m)}`,
+    mail: (m, me) => `Dear ${first(m)},\n\nA gentle reminder of our meeting on ${when(m)} (${m.mode}) about ${m.title}.\n\n${m.link ? `You can join using the button above or this link: ${m.link}\n\n` : ""}Looking forward to speaking with you.\n\nWarm regards,\n${me.name}\n${me.role}, Nakshatra Namaha Creations`,
+    wa: (m, me) => `${greet()} ${first(m)}, a gentle reminder of our meeting on *${when(m)}* about *${m.title}*.${m.link ? `\nJoin: ${m.link}` : ""}\n\n${me.name}, NNC` },
+  { k: "reschedule", l: "Rescheduled",
+    sub: (m) => `Rescheduled: ${m.title}, now ${when(m)}`,
+    mail: (m, me) => `Dear ${first(m)},\n\nOur meeting about ${m.title} has been moved to ${when(m)} (${m.mode}). The details above show the new time.\n\nSorry for any inconvenience. If the new time does not suit you, please reply and we will adjust.\n\nWarm regards,\n${me.name}\n${me.role}, Nakshatra Namaha Creations`,
+    wa: (m, me) => `${greet()} ${first(m)}, our meeting about *${m.title}* is moved to *${when(m)}*.${m.link ? `\nJoin: ${m.link}` : ""}\nPlease let me know if this works for you.\n\n${me.name}, NNC` },
+  { k: "mom", l: "Minutes of meeting", needMom: true,
+    sub: (m) => `Minutes of meeting: ${m.title}, ${fd(m.date)}`,
+    mail: (m, me, mom) => `Dear ${first(m)},\n\nThank you for meeting with us on ${fdw(m.date)}. Please find the minutes of the meeting below.\n\n${mom}\n\nKindly review and reply to this email if anything needs to be corrected or added. We will go ahead with the action items as listed.\n\nWarm regards,\n${me.name}\n${me.role}, Nakshatra Namaha Creations`,
+    wa: (m, me, mom) => waTpl(m, mom, me.name) },
+  { k: "followup", l: "Follow-up on action items", needMom: true,
+    sub: (m) => `Follow-up: ${m.title}`,
+    mail: (m, me, mom) => { const A = actionsOf(mom); return `Dear ${first(m)},\n\nFollowing up on our meeting on ${fdw(m.date)} about ${m.title}.\n\n${A.length ? `Action items\n${A.join("\n")}\n\n` : ""}Could you please share an update on the items from your side? Let us know if you need anything from us.\n\nWarm regards,\n${me.name}\n${me.role}, Nakshatra Namaha Creations`; },
+    wa: (m, me, mom) => { const A = actionsOf(mom); return `${greet()} ${first(m)}, following up on our meeting on ${fdw(m.date)} about *${m.title}*.${A.length ? `\n\n${A.join("\n")}` : ""}\n\nCould you share an update from your side?\n\n${me.name}, NNC`; } },
+];
 
 const status = (m) => (!m.momTxt ? <span className="pill p-amb">Notes only, MOM not written</span>
   : m.sentWa || m.sentMail ? <span className="pill p-ok">MOM sent{m.sentWa ? " · WhatsApp" : ""}{m.sentMail ? " · Email" : ""}</span>
@@ -69,6 +103,14 @@ export default function Meetings() {
   const [to, setTo] = useState("");
   const [waTo, setWaTo] = useState("");
   const [q, setQ] = useState("");
+  const [tk, setTk] = useState("invite");          // which ready message is filled in
+  const [sub, setSub] = useState("");
+  const [sending, setSending] = useState(false);
+  const meInfo = { name: u.name, role: roleL };
+  const fillT = (x, k, momT) => {
+    const t = TEMPLATES.find(y => y.k === k) || TEMPLATES[0];
+    setTk(t.k); setSub(t.sub(x)); setMail(t.mail(x, meInfo, momT || "")); setWa(t.wa(x, meInfo, momT || ""));
+  };
   const L = [...P.meetings].sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`));
 
   const openM = (id) => {
@@ -77,7 +119,8 @@ export default function Meetings() {
     setMid(id); setShots([]); setFiles(x?.files || []); setMom(x?.momTxt || "");
     // the list leaves photos out to stay fast; load them for this meeting
     api(`/meetings/${id}`).then(j => { if (savedId.current === id) { setShots(j.data.images || []); setFiles(j.data.files || []); setFull(id); } }, (e) => toast(e.message));
-    setWa(x?.momTxt ? waTpl(x, x.momTxt, u.name) : ""); setMail(x?.momTxt ? mailTpl(x, x.momTxt, u.name, roleL) : "");
+    setTo(x?.clientEmail || ""); setWaTo(x?.clientPhone || "");
+    if (x) fillT(x, x.momTxt ? (x.sentMail ? "followup" : "mom") : x.date >= today() ? "reminder" : "invite", x.momTxt);
     window.scrollTo(0, 0);
   };
   // Photos are shrunk to fit the server limit (8 images, under 900 KB each)
@@ -103,15 +146,16 @@ export default function Meetings() {
       setUpBusy(n => n - 1);
     }
   };
-  const save = async (e, withMom) => {
+  const save = async (e, withMom, invite) => {
     e.preventDefault();
     if (busy) return;
     const form = e.target.form || e.target;
     if (!form.reportValidity()) return;
     const d = Object.fromEntries(new FormData(form));
-    if (!d.notes.trim() && !shots.length && !files.length) { toast("Write some notes or attach a photo or document"); return; }
+    if (!invite && !d.notes.trim() && !shots.length && !files.length) { toast("Write some notes or attach a photo or document"); return; }
+    if (invite && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.cemail.trim())) { toast("Add the client's email to send the invite"); return; }
     const id = m?._id || savedId.current;
-    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes: d.notes, files };
+    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes: d.notes, files, clientEmail: d.cemail.trim(), clientPhone: d.cphone.trim(), link: d.link.trim(), ...(invite ? { planned: true } : {}) };
     if (!id || full === id) rec.images = shots;
     if (withMom) rec.momTxt = momText(rec, { name: u.name, role: roleL });
     setBusy(true);
@@ -120,8 +164,18 @@ export default function Meetings() {
     if (!doc) return;
     savedId.current = doc._id; setFull(doc._id);
     setMid(doc._id);
-    if (withMom) { setMom(rec.momTxt); setWa(waTpl(rec, rec.momTxt, u.name)); setMail(mailTpl(rec, rec.momTxt, u.name, roleL)); toast("Minutes written from your notes. Check them before sending."); }
-    else toast("Notes saved");
+    setTo(rec.clientEmail); setWaTo(rec.clientPhone);
+    if (invite) {
+      const t = TEMPLATES[0];
+      try {
+        const j = await api(`/meetings/${doc._id}/email`, { method: "POST", body: { kind: "invite", to: rec.clientEmail, subject: t.sub(rec), text: t.mail(rec, meInfo) } });
+        toast(j.message || "Invite emailed"); P.refresh();
+      } catch (ex) { toast(`Meeting saved, but the invite was not sent: ${ex.message}`); }
+      fillT(rec, "reminder");
+      return;
+    }
+    if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes written from your notes. Check them before sending."); }
+    else { fillT(rec, mom ? "mom" : "invite", mom); toast("Notes saved"); }
   };
   // Record each send (WhatsApp or email, and to whom) in the meeting's send history
   const mark = async (via) => {
@@ -130,6 +184,18 @@ export default function Meetings() {
       await api(`/meetings/${m._id}/sent`, { method: "POST", body: { via, to: via === "email" ? to : waTo } });
       P.refresh();
     } catch (ex) { toast(ex.message); }
+  };
+  // the email goes from the server: to the client, a copy to the employee
+  const sendMail = async () => {
+    if (!m || sending) return;
+    if (!to.trim()) { toast("Enter the client's email"); return; }
+    setSending(true);
+    try {
+      if (mom !== m.momTxt) await api(`/meetings/${m._id}`, { method: "PUT", body: { ...m, momTxt: mom } });
+      const j = await api(`/meetings/${m._id}/email`, { method: "POST", body: { kind: tk, to, subject: sub, text: mail } });
+      toast(j.message || "Email sent"); P.refresh();
+    } catch (ex) { toast(ex.message); }
+    finally { setSending(false); }
   };
   const waNum = (() => { const d = waTo.replace(/\D/g, ""); return d.length === 10 ? `91${d}` : d; })();
   const allSends = P.meetings.flatMap(x => (x.sendLog || []).map(l => ({ ...l, m: x }))).sort((a, b) => new Date(b.at) - new Date(a.at));
@@ -203,7 +269,12 @@ export default function Meetings() {
               <div className="f"><label htmlFor="m7">From the client side</label><input id="m7" name="theirs" type="text" defaultValue={m?.theirs || ""} placeholder="Names" /></div>
             </div>
             <div className="f"><label htmlFor="m8">From NNC</label><input id="m8" name="ours" type="text" defaultValue={m?.ours || u.name} /></div>
-            <div className="f"><label htmlFor="m9">Meeting notes</label><textarea id="m9" name="notes" rows={11} defaultValue={m?.notes || ""} placeholder="Write each point on a new line. Who said what, what was decided, who will do what and by when." /></div>
+            <div className="g2">
+              <div className="f"><label htmlFor="m12">Client email (invite and minutes)</label><input id="m12" name="cemail" type="email" defaultValue={m?.clientEmail || ""} placeholder="client@company.com" /></div>
+              <div className="f"><label htmlFor="m13">Client WhatsApp</label><input id="m13" name="cphone" type="tel" defaultValue={m?.clientPhone || ""} placeholder="98450 12345" /></div>
+            </div>
+            <div className="f"><label htmlFor="m14">Meeting link</label><input id="m14" name="link" type="url" defaultValue={m?.link || ""} placeholder="https://meet.google.com/..." /></div>
+            <div className="f"><label htmlFor="m9">Meeting notes{!m ? " (leave empty when planning a meeting)" : ""}</label><textarea id="m9" name="notes" rows={11} defaultValue={m?.notes || ""} placeholder="Write each point on a new line. Who said what, what was decided, who will do what and by when." /></div>
             <div className="f"><label htmlFor="m11">MOM and documents (PDF, Word, Excel, images){files.length ? ` · ${files.length} attached` : ""}</label>
               <div className="drop">
                 <input id="m11" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={e => { addDocs(e.target.files); e.target.value = ""; }} />
@@ -225,37 +296,49 @@ export default function Meetings() {
             <div className="row">
               <button className="btn p lg" disabled={busy || upBusy > 0}>{busy ? "Saving…" : m?.momTxt ? "Save and rewrite the MOM" : "Save and write the MOM"}</button>
               <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, false)}>Save notes only</button>
+              {!m && <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, false, true)}>Schedule and email the invite</button>}
               {m && <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={async () => { if (await confirmBox({ title: "Delete this meeting?", text: "Its notes and minutes are deleted too.", ok: "Delete", danger: true })) { P.removeMeeting(m._id); setMid(""); } }}>Delete</button>}
             </div>
           </form>
         </section>
         <div>
-          {m && mom ? (
-            <>
+          {m && mom && (
               <section className="card"><h3>Minutes of meeting {status(m)}</h3>
                 <div className="pad">
                   <div className="alert am">Laid out from your typed notes. Check names, dates and amounts before sending.</div>
-                  <textarea className="mom" value={mom} onChange={e => { setMom(e.target.value); setWa(waTpl(m, e.target.value, u.name)); setMail(mailTpl(m, e.target.value, u.name, roleL)); }} aria-label="Minutes of meeting" />
+                  <textarea className="mom" value={mom} onChange={e => { setMom(e.target.value); if (tk === "mom" || tk === "followup") fillT(m, tk, e.target.value); }} aria-label="Minutes of meeting" />
                   <div className="row" style={{ marginTop: 10 }}><button type="button" className="btn p" disabled={busy} onClick={async () => { setBusy(true); const r = await P.saveMeeting({ ...m, files, momTxt: mom }); setBusy(false); if (r) toast("Minutes saved"); }}>Save changes</button></div>
                 </div></section>
-              <section className="card"><h3>Send the MOM</h3>
+          )}
+          {m && !mom && (
+            <section className="card"><h3>Minutes of meeting</h3>
+              <div className="empty">After the meeting, write your notes on the left and tap <b>Save and write the MOM</b>. Then send the minutes with the ready email below.</div></section>
+          )}
+          {m ? (
+            <>
+              <section className="card"><h3>Send to the client</h3>
                 <div className="pad">
-                  <div className="f"><label htmlFor="wa">WhatsApp message{m.sentWa ? ` · sent ${fd(m.sentWa)}` : ""}</label><textarea id="wa" className="msg" style={{ minHeight: 200 }} value={wa} onChange={e => setWa(e.target.value)} /></div>
-                  <div className="row" style={{ marginBottom: 18 }}>
-                    <input type="tel" className="mt-wa" value={waTo} onChange={e => setWaTo(e.target.value)} placeholder="Client WhatsApp number (optional)" aria-label="WhatsApp number" />
-                    <a className="btn g" href={`https://wa.me/${waNum}?text=${encodeURIComponent(wa)}`} target="_blank" rel="noopener noreferrer" onClick={() => mark("whatsapp")}>Send on WhatsApp</a>
+                  <div className="mt-tpls" role="group" aria-label="Ready messages">
+                    {TEMPLATES.map(t => <button type="button" key={t.k} className={`chip ${tk === t.k ? "on" : ""}`} disabled={t.needMom && !mom} title={t.needMom && !mom ? "Write the minutes first" : ""} onClick={() => fillT(m, t.k, mom)}>{t.l}</button>)}
                   </div>
-                  <div className="f"><label htmlFor="mto">To (client email)</label><input id="mto" type="text" value={to} onChange={e => setTo(e.target.value)} placeholder="client@example.com" /></div>
-                  <div className="f"><label htmlFor="mb">Email{m.sentMail ? ` · emailed ${fd(m.sentMail)}` : ""}</label><textarea id="mb" rows={12} value={mail} onChange={e => setMail(e.target.value)} /></div>
-                  <a className="btn p" href={`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(`Minutes of meeting: ${m.title}, ${fd(m.date)}`)}&body=${encodeURIComponent(mail)}`} onClick={() => mark("email")}>Send email</a>
+                  <div className="f"><label htmlFor="mto">To (client email, more than one with commas)</label><input id="mto" type="text" value={to} onChange={e => setTo(e.target.value)} placeholder="client@company.com" /></div>
+                  <div className="f"><label htmlFor="msub">Subject</label><input id="msub" type="text" value={sub} onChange={e => setSub(e.target.value)} /></div>
+                  <div className="f"><label htmlFor="mb">Email{m.sentMail ? ` · minutes emailed ${fd(m.sentMail)}` : ""}</label><textarea id="mb" rows={12} value={mail} onChange={e => setMail(e.target.value)} /></div>
+                  <div className="row" style={{ marginBottom: 6 }}><button type="button" className="btn p" disabled={sending || !mail.trim()} onClick={sendMail}><Mail size={15} /> {sending ? "Sending…" : "Send email"}</button></div>
+                  <p className="sub" style={{ marginTop: 0 }}>Sent from NNC's email with the meeting details on top{tk === "mom" || tk === "followup" ? " and your documents as links" : ""}. A copy comes to you{u.email ? ` (${u.email})` : ""}, and the client's reply comes to you.</p>
+                  <div className="f" style={{ marginTop: 14 }}><label htmlFor="wa">WhatsApp message{m.sentWa ? ` · sent ${fd(m.sentWa)}` : ""}</label><textarea id="wa" className="msg" style={{ minHeight: 170 }} value={wa} onChange={e => setWa(e.target.value)} /></div>
+                  <div className="row">
+                    <input type="tel" className="mt-wa" value={waTo} onChange={e => setWaTo(e.target.value)} placeholder="Client WhatsApp number" aria-label="WhatsApp number" />
+                    <a className="btn g" href={`https://wa.me/${waNum}?text=${encodeURIComponent(wa)}`} target="_blank" rel="noopener noreferrer" onClick={() => mark("whatsapp")}><MessageCircle size={15} /> Send on WhatsApp</a>
+                  </div>
                 </div></section>
               <section className="card"><h3>Send history <small>{(m.sendLog || []).length}</small></h3>
                 {(m.sendLog || []).length ? [...m.sendLog].reverse().map((l, i) => <SendLi key={i} l={l} />) : <div className="empty">Not sent yet.</div>}
               </section>
             </>
           ) : (
-            <section className="card"><h3>Minutes of meeting</h3>
-              <div className="empty">{m ? <>Notes saved. Tap <b>Save and write the MOM</b> to get the minutes.</> : "The minutes appear here after you save your notes."}</div></section>
+            <section className="card"><h3>Send to the client</h3>
+              <div className="empty">Planning a meeting? Add the client's email and tap <b>Schedule and email the invite</b>. After the meeting, write the notes and tap <b>Save and write the MOM</b>.</div></section>
           )}
         </div>
       </div>
