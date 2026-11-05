@@ -12,41 +12,48 @@ export const usePortal = () => useContext(Ctx);
 
 const NO_NOTIF = { list: [], unread: 0, unreadMessages: 0 };
 const EMPTY = { entries: [], days: [], tasks: [], blockers: [], meetings: [], assigned: { clients: [], projects: [] } };
+// The last data loaded is kept in this browser, so the portal shows it straight away and updates it in the background
+const cacheKey = (s) => (s?.user?.id ? `nnc-portal-cache-${s.user.id}` : "");
+const readCache = (s) => { try { const k = cacheKey(s); const j = k && JSON.parse(localStorage.getItem(k) || "null"); return j?.entries ? { ...EMPTY, ...j } : EMPTY; } catch { return EMPTY; } };
+const writeCache = (s, d) => { try { const k = cacheKey(s); if (k) localStorage.setItem(k, JSON.stringify(d)); } catch { /* storage full or blocked */ } };
 
 export function PortalProvider({ children }) {
   const [session, setSession] = useState(readAuth);
-  const [data, setData] = useState(EMPTY);
+  const [data, setData] = useState(() => readCache(readAuth()));
   const [loading, setLoading] = useState(false);
   const [attendance, setAttendance] = useState(null);   // today's check in / check out
 
-  const signIn = useCallback((s, remember = true) => { writeAuth(s, remember); setData(EMPTY); setSession(s); }, []);
+  const signIn = useCallback((s, remember = true) => { writeAuth(s, remember); setData(readCache(s)); setSession(s); }, []);
   const [notif, setNotif] = useState(NO_NOTIF);
   useRise(notif.unread, "notif");             // sound for a new notification
   useRise(notif.unreadMessages, "msg");       // and for a new message from the admin
-  const signOut = useCallback(() => { writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setAttendance(null); setSession(null); }, []);
+  const signOut = useCallback(() => { writeCache(readAuth(), null); writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setAttendance(null); setSession(null); }, []);
   useEffect(() => { setOnExpired(() => { signOut(); toast("Your session has ended. Please sign in again."); }); }, [signOut]);
 
   const isEmp = session?.type === "emp";
 
-  // Load everything the employee pages show (last 70 days of work)
-  const refresh = useCallback(async () => {
+  // Load everything the employee pages show (last 70 days of work). After a change only the parts
+  // that change are reloaded: the profile and the assigned projects stay as they are.
+  const refresh = useCallback(async (full = false) => {
     if (!isEmp) return;
     setLoading(true);
     try {
-      const [me, work, tasks, blockers, meetings, assigned, att] = await Promise.all([
-        api("/me"), api(`/work?from=${T(-70)}&to=${today()}`), api("/tasks"), api("/blockers"), api("/meetings"), api("/assigned"),
+      const [work, tasks, blockers, meetings, att, me, assigned] = await Promise.all([
+        api(`/work?from=${T(-70)}&to=${today()}`), api("/tasks"), api("/blockers"), api("/meetings"),
         api(`/attendance?date=${today()}`).catch(() => null),
+        full ? api("/me") : null, full ? api("/assigned") : null,
       ]);
       if (att) setAttendance(att.data);
-      setSession(s => { const n = { ...s, user: me.data }; writeAuth(n, !!localStorage.getItem("nnc-portal-auth")); return n; });
-      setData({
-        entries: work.data.work, days: work.data.days, tasks: tasks.data, blockers: blockers.data,
-        meetings: meetings.data, assigned: assigned.data,
+      if (me) setSession(s => { const n = { ...s, user: me.data }; writeAuth(n, !!localStorage.getItem("nnc-portal-auth")); return n; });
+      setData(d => {
+        const n = { entries: work.data.work, days: work.data.days, tasks: tasks.data, blockers: blockers.data, meetings: meetings.data, assigned: assigned ? assigned.data : d.assigned };
+        writeCache(readAuth(), n);
+        return n;
       });
     } catch (err) { if (err.status !== 401) toast(err.message); }
     finally { setLoading(false); }
   }, [isEmp]);
-  useEffect(() => { queueMicrotask(refresh); }, [refresh, session?.token]);
+  useEffect(() => { queueMicrotask(() => refresh(true)); }, [refresh, session?.token]);
 
   // Bell notifications and unread admin messages, checked every 15 seconds
   const loadNotifs = useCallback(() => {

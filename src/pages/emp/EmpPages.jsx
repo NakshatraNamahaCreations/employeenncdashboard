@@ -112,7 +112,7 @@ function StdDay() {
         <div className="kpi"><span className="l">Items logged today</span><span className="v">{L.length}</span><span className="s">{L.length ? `last: ${L[0].title.slice(0, 34)}` : "nothing yet"}</span></div>
         <div className="kpi"><span className="l">Tasks due today</span><span className="v" style={{ color: due.some(t => t.due < today()) ? "var(--red)" : "var(--navy)" }}>{due.length}</span>
           <span className="s">{due.filter(t => t.due < today()).length ? `${due.filter(t => t.due < today()).length} overdue` : "none overdue"}</span></div>
-        <div className="kpi"><span className="l">{R.pick === "clients" ? "My clients" : R.pick === "projects" ? "My projects" : "Projects"}</span><span className="v">{mine.length}</span><span className="s">assigned in the CRM</span></div>
+        <div className="kpi"><span className="l">{R.pick === "clients" ? "My projects" : R.pick === "projects" ? "My projects" : "Projects"}</span><span className="v">{mine.length}</span><span className="s">assigned in the CRM</span></div>
       </div>
       <div className="row" style={{ marginBottom: 16 }}>
         <button type="button" className="btn p lg" onClick={() => nav("/log")}>+ Log work</button>
@@ -121,7 +121,7 @@ function StdDay() {
       </div>
       <div className="grid2">
         <div>
-          <section className="card"><h3>{R.pick === "clients" ? "My clients" : R.pick === "projects" ? "My projects" : "Projects"} <Link className="btn sm r" to={`/${R.page[0]}`}>{R.page[1]}</Link></h3>
+          <section className="card"><h3>{R.pick === "clients" ? "My projects" : R.pick === "projects" ? "My projects" : "Projects"} <Link className="btn sm r" to={`/${R.page[0]}`}>{R.page[1]}</Link></h3>
             {mine.length ? mine.slice(0, 8).map(x => (
               <div key={x.id} className="li"><div className="x"><b>{x.name}</b><span className="sub">{x.site || x.stage || ""}</span></div></div>
             )) : <div className="empty">Nothing assigned to you yet. Your manager assigns {R.pick || "work"} in the CRM.</div>}
@@ -263,8 +263,10 @@ export function LogWork() {
       const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : d.title;
       items = [{ title, url: url(d.url), meta }];
     }
+    const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;
+    if (hrs <= 0) { toast("Enter the time spent, in hours and minutes"); return; }
     setBusy(true);
-    const r = await P.addWork({ type, date: d.date, refType: refType || "", refId: refId || "", hrs: +d.hrs || 0, items },
+    const r = await P.addWork({ type, date: d.date, refType: refType || "", refId: refId || "", hrs: Math.round(hrs * 100) / 100, items },
       type === "backlink" ? `${items.length} backlink${items.length > 1 ? "s" : ""} saved` : type === "bug" ? "Bug sent to the developer" : `${TY[type].l} saved`);
     setBusy(false);
     if (r) setType("");
@@ -321,7 +323,11 @@ export function LogWork() {
               <Fields type={type} devs={devs} />
               <div className="lw-sec"><span className="lw-n">3</span><b>Time</b></div>
               <div className="g2">
-                <Inp name="hrs" label="Time spent (hours)" type="number" min="0.25" step="0.25" defaultValue={hrsDef} required />
+                <div className="f"><label htmlFor="i-hh">Time spent</label>
+                  <div className="lw-time">
+                    <input id="i-hh" name="hh" type="number" min="0" max="16" step="1" defaultValue={Math.floor(hrsDef)} aria-label="Hours" /><span>h</span>
+                    <select name="mm" defaultValue={Math.round((hrsDef % 1) * 60)} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{m}</option>)}</select><span>min</span>
+                  </div></div>
                 <Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} min={T(-2)} />
               </div>
               {type === "backlink" && <p className="sub">Time is for all the links together.</p>}

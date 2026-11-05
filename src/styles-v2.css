@@ -412,3 +412,13 @@ h2.t { font-size: 26px; letter-spacing: -.2px; }
 .mc-person { display: inline-flex; gap: 6px; align-items: baseline; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px; font-size: 12.5px; }
 .mc-person b { color: var(--navy); font-weight: 500; }
 .mc-person em, .mc-people > em { font-style: normal; color: var(--mut); font-size: 11.5px; }
+
+/* log work: hours + minutes */
+.lw-time { display: flex; align-items: center; gap: 8px; }
+.lw-time input { flex: 1; min-width: 0; }
+.lw-time select { width: 90px; flex: none; }
+.lw-time span { color: var(--mut, #64748b); font-size: 14px; }
+
+/* checked out: the day is closed */
+.day-closed { max-width: 560px; margin: 40px auto; padding: 32px; text-align: center; }
+.day-closed .lead { margin: 8px 0 20px; }

@@ -109,7 +109,10 @@ function Bellbox() {
 }
 
 export function EmpLayout() {
-  const { session, tasks, meetings, notif, signOut } = usePortal();
+  const { session, tasks, meetings, notif, signOut, attendance } = usePortal();
+  // checked out today: the portal is closed until tomorrow morning
+  const S = attendance?.date === today() ? attendance.sessions || [] : [];
+  const closedAt = S.length && !S.some(s => !s.out) ? S[S.length - 1].out : null;
   const u = session.user, R = roleInfo(u);   // all of this person's roles
   const nav = useNavigate();
   const { pathname } = useLocation();
@@ -121,7 +124,7 @@ export function EmpLayout() {
       { to: "/calendar", label: "Calendar", ic: CalendarDays, sub: "Meetings, deliveries, testing and tasks by date" },
     ]],
     ["My work", [
-      ...(R.picks.has("clients") ? [{ to: "/clients", label: "My clients", ic: Users2, sub: "Your clients, their targets and what is done this month" }] : []),
+      ...(R.picks.has("clients") ? [{ to: "/clients", label: R.picks.has("projects") ? "SEO & ads projects" : "My projects", ic: Users2, sub: "Your projects, this month's targets and what is done so far" }] : []),
       ...(R.picks.has("projects") ? [{ to: "/projects", label: "My projects", ic: FolderKanban, sub: "Status, documents, integrations and team for each project" }] : []),
       { to: "/tasks", label: "My tasks", ic: ListTodo, sub: "Tasks assigned to you and your own to-dos", badge: dueTasks },
       // one page for each of their roles (an SEO analyst who also runs Google Ads gets both)
@@ -172,9 +175,15 @@ export function EmpLayout() {
             <span className="av sm" style={{ background: R.c }} title={u.email}>{initials(u.name)}</span>
           </span>
         </div>
-        <div className="page"><div className="page-in"><Outlet /></div></div>
+        <div className="page"><div className="page-in">{closedAt ? (
+          <section className="card day-closed">
+            <h2 className="t">See you tomorrow<span>.</span></h2>
+            <p className="lead">You checked out at <b>{hm(closedAt)}</b>. Your day is closed, so nothing can be logged or changed now. The portal opens again tomorrow morning when you check in.</p>
+            <button type="button" className="btn" onClick={out}><LogOut size={15} /> Sign out</button>
+          </section>
+        ) : <Outlet />}</div></div>
       </main>
-      <TeamChat />
+      {!closedAt && <TeamChat />}
     </div>
   );
 }

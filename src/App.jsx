@@ -1,15 +1,19 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { usePortal } from "./auth/store";
 import { Login, Signup, ForceChange } from "./pages/auth/AuthPages";
 import { EmpLayout } from "./layout/Shell";
 import { MyDay, LogWork, MyTasks, MyHistory, Profile } from "./pages/emp/EmpPages";
-import { RolePage } from "./pages/emp/RolePages";
-import Meetings from "./pages/emp/Meetings";
-import { ProjectsPage, ProjectDetail } from "./pages/emp/Projects";
-import Calendar from "./pages/emp/Calendar";
-import Messages from "./pages/emp/Messages";
-import Documents from "./pages/emp/Documents";
-import MyClients from "./pages/emp/MyClients";
+// the less used pages load when they are first opened, so the portal starts faster
+const RolePage = lazy(() => import("./pages/emp/RolePages").then(m => ({ default: m.RolePage })));
+const Meetings = lazy(() => import("./pages/emp/Meetings"));
+const ProjectsPage = lazy(() => import("./pages/emp/Projects").then(m => ({ default: m.ProjectsPage })));
+const ProjectDetail = lazy(() => import("./pages/emp/Projects").then(m => ({ default: m.ProjectDetail })));
+const Calendar = lazy(() => import("./pages/emp/Calendar"));
+const Messages = lazy(() => import("./pages/emp/Messages"));
+const Documents = lazy(() => import("./pages/emp/Documents"));
+const MyClients = lazy(() => import("./pages/emp/MyClients"));
+const Wait = ({ children }) => <Suspense fallback={<div className="empty">Loading…</div>}>{children}</Suspense>;
 
 export default function App() {
   const { session } = usePortal();
@@ -32,16 +36,16 @@ export default function App() {
         <Route index element={<MyDay />} />
         <Route path="log" element={<LogWork />} />
         <Route path="tasks" element={<MyTasks />} />
-        <Route path="meetings" element={<Meetings />} />
-        <Route path="calendar" element={<Calendar />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="documents" element={<Documents />} />
-        <Route path="clients" element={<MyClients />} />
-        <Route path="projects" element={<ProjectsPage />} />
-        <Route path="projects/:id" element={<ProjectDetail />} />
+        <Route path="meetings" element={<Wait><Meetings /></Wait>} />
+        <Route path="calendar" element={<Wait><Calendar /></Wait>} />
+        <Route path="messages" element={<Wait><Messages /></Wait>} />
+        <Route path="documents" element={<Wait><Documents /></Wait>} />
+        <Route path="clients" element={<Wait><MyClients /></Wait>} />
+        <Route path="projects" element={<Wait><ProjectsPage /></Wait>} />
+        <Route path="projects/:id" element={<Wait><ProjectDetail /></Wait>} />
         <Route path="history" element={<MyHistory />} />
         <Route path="profile" element={<Profile />} />
-        <Route path=":rolePage" element={<RolePage />} />
+        <Route path=":rolePage" element={<Wait><RolePage /></Wait>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

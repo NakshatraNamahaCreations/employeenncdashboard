@@ -5,7 +5,7 @@ import { api } from "../../api";
 import { toast } from "../../toast";
 import { fd } from "../../util";
 
-// My clients: every client the admin gave me in SEO & Ads Team, with the team on it,
+// My projects (SEO and ads): every client the admin gave me in SEO & Ads Team, with the team on it,
 // this month's targets, what is done so far and what is left today.
 
 const JOB = { seo: ["SEO", "p-blue"], ads: ["Google Ads", "p-amb"], design: ["Design", "p-pur"] };
@@ -32,18 +32,18 @@ export default function MyClients() {
 
   return (
     <>
-      <h2 className="t">My clients<span>.</span></h2>
-      <p className="lead">The clients your admin has given you, with this month's targets and what is done so far. Log every piece of work so it counts here and in the client's report.</p>
-      {L && L.length > 3 && <input type="search" className="mt-q" style={{ marginBottom: 12 }} placeholder="Search clients" value={q} onChange={e => setQ(e.target.value)} aria-label="Search clients" />}
+      <h2 className="t">My projects<span>.</span></h2>
+      <p className="lead">The projects your admin has given you, with this month's targets and what is done so far. Log every piece of work so it counts here and in the client's report.</p>
+      {L && L.length > 3 && <input type="search" className="mt-q" style={{ marginBottom: 12 }} placeholder="Search projects" value={q} onChange={e => setQ(e.target.value)} aria-label="Search projects" />}
       {L == null ? <section className="card"><div className="empty">Loading your clients…</div></section>
-        : !L.length ? <section className="card"><div className="empty">No clients are assigned to you yet. Your admin assigns them in the CRM under SEO &amp; Ads Team.</div></section>
+        : !L.length ? <section className="card"><div className="empty">No projects are assigned to you yet. Your admin assigns them in the CRM under SEO &amp; Ads Team.</div></section>
         : <div className="mc-grid">{shown.map(c => {
           const t = c.targets, d = c.done, seo = c.myJobs.includes("seo"), ads = c.myJobs.includes("ads"), des = c.myJobs.includes("design");
           return (
             <section key={c.id} className="card mc">
               <div className="mc-h">
                 <div style={{ minWidth: 0 }}><b>{c.name}</b>
-                  <span className="sub">{c.start ? `Client since ${fd(c.start)}` : ""}</span></div>
+                  <span className="sub">{c.start ? `Since ${fd(c.start)}` : ""}</span></div>
                 <span className="mc-jobs">{c.myJobs.map(j => <span key={j} className={`pill ${JOB[j][1]}`}>{JOB[j][0]}</span>)}</span>
               </div>
               <div className="mc-info">
@@ -53,14 +53,14 @@ export default function MyClients() {
                 {c.site && <a href={/^https?:/.test(c.site) ? c.site : `https://${c.site}`} target="_blank" rel="noopener noreferrer"><Globe size={13} /> {c.site}</a>}
               </div>
 
-              <div className="mc-people"><small>Team on this client</small>
+              <div className="mc-people"><small>Team on this project</small>
                 {c.people?.length ? c.people.map(p => <span key={p.name} className="mc-person"><b>{p.name}</b><em>{p.roles.map(r => ({ seo: "SEO", ads: "Ads", design: "Design" }[r] || r)).join(", ")}</em></span>) : <em>Only you</em>}
               </div>
 
               {seo && (
                 <div className="mc-sec"><h4><Search size={14} /> SEO this month</h4>
-                  <Bar label="Backlinks today" done={d.backlinkToday} target={t.backlinkDay} note={`${d.backlinkMonth} of ${t.backlink} this month`} />
-                  <Bar label="GMB posts this week" done={d.gmbWeek} target={t.gmbWeek} note={`${d.gmbMonth} of ${t.gmb} this month`} />
+                  <Bar label="Backlinks this month" done={d.backlinkMonth} target={t.backlink} note={d.backlinkToday ? `${d.backlinkToday} added today` : ""} />
+                  <Bar label="GMB posts this month" done={d.gmbMonth} target={t.gmb} />
                   <Bar label="Blogs this month" done={d.blogMonth} target={t.blog} />
                   <div className="mc-kw"><span>{c.keywords.count} agreed keyword{c.keywords.count === 1 ? "" : "s"}</span><span className="sub">{c.keywords.lastCheck ? `Last rank check ${fd(c.keywords.lastCheck)}` : "Ranks not checked yet"}</span></div>
                 </div>
@@ -72,6 +72,12 @@ export default function MyClients() {
                     {c.ads.today?.sent ? <span className="pill p-ok">Sent</span> : c.ads.today ? <span className="pill p-blue">Saved, not sent</span> : <span className={`pill ${hr >= 18 ? "p-red" : "p-amb"}`}>{hr >= 18 ? "Late, send by 7 pm" : "Not done yet"}</span>}
                   </div>
                   <Bar label="Spend this month" done={Math.round(c.ads.spendMonth)} target={c.budget} note={`${inr(c.ads.spendMonth)} of ${inr(c.budget)} budget · ${c.ads.leadsMonth} leads · ${c.ads.days} reports`} />
+                </div>
+              )}
+              {ads && c.metaBudget > 0 && (
+                <div className="mc-sec"><h4><LineChart size={14} /> Meta Ads</h4>
+                  <div className="mc-row"><span>Budget this month</span><b>{inr(c.metaBudget)}</b></div>
+                  <span className="sub">Facebook and Instagram ads for this client</span>
                 </div>
               )}
               {des && (
