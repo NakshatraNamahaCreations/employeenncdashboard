@@ -328,7 +328,7 @@ export function LogWork() {
                     <input id="i-hh" name="hh" type="number" min="0" max="16" step="1" defaultValue={Math.floor(hrsDef)} aria-label="Hours" /><span>h</span>
                     <select name="mm" defaultValue={Math.round((hrsDef % 1) * 60)} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{m}</option>)}</select><span>min</span>
                   </div></div>
-                <Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} min={T(-2)} />
+                <Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} />
               </div>
               {type === "backlink" && <p className="sub">Time is for all the links together.</p>}
               <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : locked ? "Save as extra work" : "Save to timesheet"}</button></div>

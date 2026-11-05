@@ -104,7 +104,7 @@ export function Tips({ type }) {
   return (
     <section className="card"><h3><Lightbulb size={16} color="#D97706" /> Good to know</h3>
       <ul className="lw-tips">{L.map(t => <li key={t}>{t}</li>)}
-        <li>You can log work for today and the two days before, until that day is submitted.</li></ul>
+        <li>You can log work for today or any past day. Future dates cannot be picked. Work added to a day that is already submitted counts as extra work.</li></ul>
     </section>
   );
 }
