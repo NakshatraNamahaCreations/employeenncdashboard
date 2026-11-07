@@ -8,6 +8,7 @@ import { confirmBox } from "../../confirm";
 import Modal from "../../Modal";
 import PwInput from "../../PwInput";
 import DevDay from "./DevDay";
+import TodayPlan from "./TodayPlan";
 import { ArrowLeft } from "lucide-react";
 import { DayPanel, TypeTiles, TodaySheet, Tips } from "./LogParts";
 import { TY_IC } from "./workIcons";
@@ -92,6 +93,7 @@ function StdDay() {
   const L = P.entries.filter(e => e.date === today());
   const h = hoursOn(P.entries, today());
   const rec = P.days.find(d => d.date === today());
+  const last = [...P.days].sort((a, b) => b.date.localeCompare(a.date))[0];
   const due = P.tasks.filter(t => t.status !== "done" && t.due <= today());
   const bl = P.blockers.filter(b => !b.resolved);
   const mine = [...(R.picks.has("clients") ? P.assigned.clients : []), ...(R.picks.has("projects") || !R.picks.size ? P.assigned.projects : [])];
@@ -132,6 +134,7 @@ function StdDay() {
           </section>
         </div>
         <div>
+          <TodayPlan refs={mine} yesterday={last && last.date < today() ? last.plan : ""} />
           <section className="card"><h3>Tasks for today <Link className="btn sm r" to="/tasks">All tasks</Link></h3>
             {due.length ? due.map(t => <TaskLi key={t._id} t={t} onStatus={P.setTaskStatus} />) : <div className="empty">No tasks due today.</div>}</section>
           <section className="card"><h3>This week</h3><div className="pad"><WeekStrip entries={P.entries} days={P.days} /></div></section>
@@ -221,12 +224,31 @@ function Fields({ type, devs }) {
         <Sel name="assign" label="Assign to" required opts={[["", devs.length ? "Choose a developer" : "No developers have an account yet"], ...devs.map(d => [d.id, `${d.name} · ${ROLES[d.role]?.l || ""}`])]} /></div>
       <Area name="steps" label="Steps to reproduce" rows={3} /><Inp name="url" label="Video or screenshot link (optional)" />
     </>);
+    case "webcontent": return (<><Inp name="title" label="Pages or sections written" required placeholder="Home, About and Services pages" />
+      <Inp name="url" label="Document or page link" placeholder="Google Doc or website link" />
+      <div className="g3"><Inp name="pages" label="Pages" type="number" min="1" defaultValue="1" /><Inp name="words" label="Word count" type="number" min="0" /><Inp name="kw" label="Main keyword" /></div></>);
+    case "blogcontent": return (<><Inp name="title" label="Blog title" required />
+      <Inp name="url" label="Document link" placeholder="Google Doc link" />
+      <div className="g2"><Inp name="kw" label="Keyword targeted" /><Inp name="words" label="Word count" type="number" min="100" placeholder="1200" /></div></>);
+    case "landing": return (<><Inp name="title" label="Landing page" required placeholder="Diwali offer page, Ads campaign" />
+      <Inp name="url" label="Document or page link" />
+      <div className="g2"><Inp name="kw" label="Main keyword or offer" /><Inp name="words" label="Word count" type="number" min="0" /></div></>);
+    case "campaign": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="Platform" opts={["Google Ads", "Meta Ads", "LinkedIn Ads", "YouTube Ads", "Other"]} /></div>
+      <Inp name="title" label="What was set up" required placeholder="Search campaign, 3 ad groups, 12 ads" />
+      <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="url" label="Link (optional)" /></div></>);
+    case "social": return (<><Inp name="title" label="Posts scheduled" required placeholder="November festive posts" />
+      <div className="g3"><Sel name="platform" label="Platform" opts={["Instagram", "Facebook", "Instagram and Facebook", "LinkedIn", "YouTube", "X (Twitter)", "GMB"]} /><Inp name="posts" label="Number of posts" type="number" min="1" defaultValue="1" /><Inp name="url" label="Planner or Drive link" /></div></>);
+    case "position": return (<><Inp name="title" label="What was tracked" required placeholder="Weekly rank check, top 20 keywords" />
+      <div className="g2"><Inp name="kws" label="Keywords checked" type="number" min="1" /><Inp name="url" label="Sheet or tool link" /></div></>);
+    case "monthly": return (<><div className="g2"><Inp name="month" label="Report for" type="month" required /><Inp name="url" label="Report link" placeholder="PDF, Doc or Looker Studio link" /></div>
+      <Inp name="title" label="What the report covers" required placeholder="SEO and Ads results, leads, rankings" /></>);
+    case "docs": return (<><Inp name="title" label="Document or report" required placeholder="Keyword research sheet / Weekly status report" /><Inp name="url" label="Link (optional)" /></>);
     case "invoice": return (<><Inp name="title" label="Invoice or payment" required placeholder="Invoice NNC-104 sent / ₹50,000 received" /><div className="g2"><Inp name="amt" label="Amount (₹)" type="number" min="0" /><Inp name="url" label="Invoice link (optional)" /></div></>);
     default: return (<><Inp name="title" label="What did you work on" required /><Inp name="url" label="Link (optional)" /></>);
   }
 }
 
-const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype"];
+const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month"];
 
 export function LogWork() {
   const P = usePortal();
@@ -252,7 +274,8 @@ export function LogWork() {
     const d = Object.fromEntries(new FormData(e.target));
     const [refType, refId] = String(d.ref || "").split(":");
     const meta = {};
-    META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt"].includes(k) ? +d[k] : d[k]; });
+    META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt", "pages", "posts", "kws"].includes(k) ? +d[k] : d[k]; });
+    if (meta.month) meta.month = new Date(`${meta.month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
     if (type === "bug" && d.assign) meta.assignName = devs.find(x => x.id === d.assign)?.name || "";
     if (type === "screen" || type === "revision") meta.send = !!d.send;
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
@@ -260,7 +283,7 @@ export function LogWork() {
     if (type === "backlink") {
       items = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean).map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u), meta }));
     } else {
-      const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : d.title;
+      const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : type === "campaign" ? `${d.camp}: ${d.title}` : d.title;
       items = [{ title, url: url(d.url), meta }];
     }
     const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;

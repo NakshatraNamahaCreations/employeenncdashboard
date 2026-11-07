@@ -1,3 +1,4 @@
+import Linkify from "./Linkify";
 import { useEffect, useRef, useState } from "react";
 import { X, ArrowLeft, Send, Users, Search, Hash } from "lucide-react";
 import { usePortal } from "./auth/store";
@@ -6,7 +7,8 @@ import { api } from "./api";
 import { ROLES, initials } from "./roles";
 import { toast } from "./toast";
 import { useRise, useNewMessage } from "./ding";
-import { useLive, every } from "./live";
+import { useLive, every, useTyping, sayTyping, typingText } from "./live";
+import { Tick } from "./Tick";
 
 const mine = (m) => m.mine;
 
@@ -34,6 +36,9 @@ export default function TeamChat() {
   useNewMessage(msgs, cur?.id, mine);
   const { session } = usePortal();
   const first = String(session?.user?.name || "").split(" ")[0];
+  const meWho = `emp:${session?.user?.id || ""}`;
+  const typingIn = useTyping((d) => (d.chat === "team" && d.who !== meWho ? { chat: d.channel, person: d.who } : null));
+  const tp = cur ? typingIn(cur.id) : [];
   // Short greeting once per browser session
   const [hello, setHello] = useState(() => { try { return !sessionStorage.getItem("nnc-tc-hello"); } catch { return false; } });
   useEffect(() => {
@@ -76,22 +81,40 @@ export default function TeamChat() {
     finally { setBusy(false); }
   };
   const pick = (c) => { setMsgs([]); setCur(c); };
+  // Closing always goes back to the chat list, so the chat opens fresh next time.
+  // A click anywhere outside the chat closes it; Esc goes back to the list, then closes.
+  const root = useRef(null);
+  const close = () => { setOpen(false); setCur(null); setMsgs([]); setText(""); };
+  const back = () => { setCur(null); setTick(x => x + 1); };
+  const closeRef = useRef(close), backRef = useRef(back);
+  useEffect(() => { closeRef.current = close; backRef.current = back; });
+  const hasCur = !!cur;
+  useEffect(() => {
+    if (!open) return undefined;
+    const down = (e) => { if (root.current && !root.current.contains(e.target)) closeRef.current(); };
+    const key = (e) => { if (e.key === "Escape") (hasCur ? backRef.current : closeRef.current)(); };
+    document.addEventListener("mousedown", down);
+    document.addEventListener("touchstart", down);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("touchstart", down); document.removeEventListener("keydown", key); };
+  }, [open, hasCur]);
+
   if (open && hello) setHello(false);
   const groups = chans.filter(c => c.kind === "group");
   const dms = chans.filter(c => c.kind === "dm" && (!q || `${c.name} ${roleL(c.role)}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => (b.unread - a.unread) || (new Date(b.last?.at || 0) - new Date(a.last?.at || 0)) || a.name.localeCompare(b.name));
 
   return (
-    <div className={`tc ${open ? "open" : ""}`}>
+    <div className={`tc ${open ? "open" : ""}`} ref={root}>
       {open && (
         <div className="tc-panel" role="dialog" aria-label="Team chat">
           <div className="tc-h">
-            {cur ? <button type="button" className="tc-ib" onClick={() => { setCur(null); setTick(x => x + 1); }} aria-label="Back"><ArrowLeft size={17} /></button> : <span className="tc-hm"><Mascot size={40} /></span>}
+            {cur ? <button type="button" className="tc-back" onClick={back} aria-label="Back to all chats" title="Back to all chats (Esc)"><ArrowLeft size={16} /><span>All chats</span></button> : <span className="tc-hm"><Mascot size={40} /></span>}
             <div className="tc-ht">
               <b>{cur ? cur.name : "Team chat"}</b>
               <span>{cur ? (cur.kind === "group" ? "Group · everyone in it can read" : roleL(cur.role)) : "Developers, testers, designers, SEO, Ads and admin"}</span>
             </div>
-            <button type="button" className="tc-ib" onClick={() => setOpen(false)} aria-label="Close chat"><X size={17} /></button>
+            <button type="button" className="tc-ib" onClick={close} aria-label="Close chat" title="Close (click outside or Esc)"><X size={17} /></button>
           </div>
 
           {!cur ? (
@@ -102,10 +125,10 @@ export default function TeamChat() {
                 <div className="tc-hero-n"><span><Users size={13} /> {chans.filter(c => c.kind === "dm").length + 1} people</span><span><Hash size={13} /> {groups.length} groups</span>{unread > 0 && <span className="hot">{unread} unread</span>}</div>
               </div>
               <div className="tc-sec">Groups</div>
-              {groups.map(c => <ChanRow key={c.id} c={c} onClick={() => pick(c)} />)}
+              {groups.map(c => <ChanRow key={c.id} c={c} typing={typingText(typingIn(c.id))} onClick={() => pick(c)} />)}
               <div className="tc-sec">Direct messages</div>
               <label className="tc-search"><Search size={14} /><input type="search" placeholder="Find a colleague" value={q} onChange={e => setQ(e.target.value)} /></label>
-              {dms.length ? dms.map(c => <ChanRow key={c.id} c={c} onClick={() => pick(c)} />) : <div className="tc-empty">{q ? "Nobody matches." : "No colleagues have an account yet."}</div>}
+              {dms.length ? dms.map(c => <ChanRow key={c.id} c={c} typing={typingIn(c.id).length ? "typing…" : ""} onClick={() => pick(c)} />) : <div className="tc-empty">{q ? "Nobody matches." : "No colleagues have an account yet."}</div>}
             </div>
           ) : (
             <>
@@ -117,16 +140,17 @@ export default function TeamChat() {
                       {!m.mine && <span className="tc-av" style={{ background: roleC(m.role), visibility: first ? "visible" : "hidden" }}>{initials(m.name)}</span>}
                       <div className="tc-bub">
                         {first && !m.mine && cur.kind === "group" && <b className="tc-who">{m.name} <span>{roleL(m.role)}</span></b>}
-                        <span className="tc-txt">{m.text}</span>
-                        <small>{m.pending ? "sending…" : tm(m.createdAt)}</small>
+                        <span className="tc-txt"><Linkify text={m.text} /></span>
+                        <small>{tm(m.createdAt)}{m.mine && <Tick pending={m.pending} seen={m.seenBy > 0} title={m.seenBy > 0 ? (cur.kind === "group" ? `Seen by ${m.seenBy}` : "Seen") : "Sent"} />}{m.mine && cur.kind === "group" && m.seenBy > 0 && <span className="tick-n">{m.seenBy}</span>}</small>
                       </div>
                     </div>
                   );
                 })}
                 <div ref={end} />
               </div>
+              {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="tc-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => setText(e.target.value)} placeholder={`Message ${cur.kind === "group" ? cur.name : cur.name.split(" ")[0]}…`}
+                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "team", channel: cur.id }); }} placeholder={`Message ${cur.kind === "group" ? cur.name : cur.name.split(" ")[0]}…`}
                   aria-label="Message" onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="tc-send" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
               </form>
@@ -139,7 +163,7 @@ export default function TeamChat() {
           {unread > 0 ? <><b>{unread} new message{unread > 1 ? "s" : ""}</b><span>Tap to read</span></> : <><b>Hi {first}!</b><span>Need help? Chat with your team</span></>}
         </button>
       )}
-      <button type="button" className={`tc-buddy ${open ? "on" : ""}`} onClick={() => setOpen(o => !o)} aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
+      <button type="button" className={`tc-buddy ${open ? "on" : ""}`} onClick={() => (open ? close() : setOpen(true))} aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
         {open ? <span className="tc-x"><X size={22} /></span> : <Mascot size={70} happy={unread > 0} />}
         {unread > 0 && !open && <em>{unread > 99 ? "99+" : unread}</em>}
       </button>
@@ -147,13 +171,13 @@ export default function TeamChat() {
   );
 }
 
-function ChanRow({ c, onClick }) {
+function ChanRow({ c, typing, onClick }) {
   return (
     <button type="button" className={`tc-row ${c.unread ? "un" : ""}`} onClick={onClick}>
       {c.kind === "group" ? <span className="tc-av grp"><Hash size={15} /></span> : <span className="tc-av" style={{ background: roleC(c.role) }}>{initials(c.name)}</span>}
       <span className="tc-rx">
         <b>{c.name}</b>
-        <span>{c.last ? `${c.last.name}: ${c.last.text}` : c.kind === "dm" ? roleL(c.role) : "No messages yet"}</span>
+        {typing ? <span className="row-typing">{typing}</span> : <span>{c.last ? `${c.last.name}: ${c.last.text}` : c.kind === "dm" ? roleL(c.role) : "No messages yet"}</span>}
       </span>
       <span className="tc-rm">{c.last && <small>{tm(c.last.at)}</small>}{c.unread > 0 && <em>{c.unread}</em>}</span>
     </button>

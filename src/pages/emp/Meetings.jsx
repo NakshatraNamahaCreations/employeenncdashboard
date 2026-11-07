@@ -5,7 +5,11 @@ import { api, upload, fileUrl } from "../../api";
 import { roleInfo } from "../../roles";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
-import { today, fd, fdw, ampm, greet } from "../../util";
+import { today, fd, fdw, ampm, greet, nowHM } from "../../util";
+
+// The meeting's time has come (today with no time, or the time has passed): its MOM points can be added
+const isOver = (m) => !!m && (m.date < today() || (m.date === today() && (!m.time || m.time <= nowHM())));
+const hasPoints = (m) => !!(String(m.notes || "").trim() || m.files?.length || m.imgCount);
 
 /* Basic minutes from typed notes: sorts lines into points, decisions, actions and questions. */
 function quickMom(notes) {
@@ -71,7 +75,8 @@ const TEMPLATES = [
     wa: (m, me, mom) => { const A = actionsOf(mom); return `${greet()} ${first(m)}, following up on our meeting on ${fdw(m.date)} about *${m.title}*.${A.length ? `\n\n${A.join("\n")}` : ""}\n\nCould you share an update from your side?\n\n${me.name}, NNC`; } },
 ];
 
-const status = (m) => (!m.momTxt ? <span className="pill p-amb">Notes only, MOM not written</span>
+const status = (m) => (!m.momTxt ? (!isOver(m) ? <span className="pill p-blue">Scheduled</span>
+  : hasPoints(m) ? <span className="pill p-amb">Points added, MOM not written</span> : <span className="pill p-red">Add the MOM points</span>)
   : m.sentWa || m.sentMail ? <span className="pill p-ok">MOM sent{m.sentWa ? " · WhatsApp" : ""}{m.sentMail ? " · Email" : ""}</span>
     : <span className="pill p-blue">MOM ready, not sent</span>);
 
@@ -106,6 +111,7 @@ export default function Meetings() {
   const [tk, setTk] = useState("invite");          // which ready message is filled in
   const [sub, setSub] = useState("");
   const [sending, setSending] = useState(false);
+  const [early, setEarly] = useState("");         // meeting id opened for its MOM before its time
   const meInfo = { name: u.name, role: roleL };
   const fillT = (x, k, momT) => {
     const t = TEMPLATES.find(y => y.k === k) || TEMPLATES[0];
@@ -146,16 +152,18 @@ export default function Meetings() {
       setUpBusy(n => n - 1);
     }
   };
-  const save = async (e, withMom, invite) => {
+  const save = async (e, kind) => {
     e.preventDefault();
     if (busy) return;
     const form = e.target.form || e.target;
     if (!form.reportValidity()) return;
     const d = Object.fromEntries(new FormData(form));
-    if (!invite && !d.notes.trim() && !shots.length && !files.length) { toast("Write some notes or attach a photo or document"); return; }
+    const withMom = kind === "mom", invite = kind === "invite", points = kind === "mom" || kind === "points";
+    const notes = d.notes !== undefined ? d.notes : m?.notes || "";
+    if (points && !notes.trim() && !shots.length && !files.length) { toast("Write the MOM points or attach a document or photo"); return; }
     if (invite && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.cemail.trim())) { toast("Add the client's email to send the invite"); return; }
     const id = m?._id || savedId.current;
-    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes: d.notes, files, clientEmail: d.cemail.trim(), clientPhone: d.cphone.trim(), link: d.link.trim(), ...(invite ? { planned: true } : {}) };
+    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes, files, clientEmail: d.cemail.trim(), clientPhone: d.cphone.trim(), link: d.link.trim(), planned: true };
     if (!id || full === id) rec.images = shots;
     if (withMom) rec.momTxt = momText(rec, { name: u.name, role: roleL });
     setBusy(true);
@@ -174,8 +182,9 @@ export default function Meetings() {
       fillT(rec, "reminder");
       return;
     }
-    if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes written from your notes. Check them before sending."); }
-    else { fillT(rec, mom ? "mom" : "invite", mom); toast("Notes saved"); }
+    if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes written from your points. Check them before sending."); }
+    else if (kind === "schedule") { fillT(rec, "invite"); toast("Meeting scheduled. After the meeting, open it here and add the MOM points."); }
+    else { fillT(rec, mom ? "mom" : isOver(rec) ? "invite" : "reminder", mom); toast(points ? "MOM points saved" : "Meeting details saved"); }
   };
   // Record each send (WhatsApp or email, and to whom) in the meeting's send history
   const mark = async (via) => {
@@ -197,6 +206,8 @@ export default function Meetings() {
     } catch (ex) { toast(ex.message); }
     finally { setSending(false); }
   };
+  const momOpen = !!m && (isOver(m) || early === m._id || !!m.momTxt || hasPoints(m));
+  const del = async () => { if (await confirmBox({ title: "Delete this meeting?", text: "Its MOM points and minutes are deleted too.", ok: "Delete", danger: true })) { P.removeMeeting(m._id); setMid(""); } };
   const waNum = (() => { const d = waTo.replace(/\D/g, ""); return d.length === 10 ? `91${d}` : d; })();
   const allSends = P.meetings.flatMap(x => (x.sendLog || []).map(l => ({ ...l, m: x }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const ms = today().slice(0, 7);
@@ -205,20 +216,20 @@ export default function Meetings() {
   const list = (
     <section className="card"><h3>My meetings <small>{L.length}</small>
       <input className="r mt-q" type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} aria-label="Search meetings" />
-      <button type="button" className="btn sm p" onClick={() => { savedId.current = ""; setFull(""); setMid("new"); setShots([]); setFiles([]); setMom(""); }}>+ New meeting</button></h3>
+      <button type="button" className="btn sm p" onClick={() => { savedId.current = ""; setFull(""); setMid("new"); setShots([]); setFiles([]); setMom(""); }}>+ Schedule a meeting</button></h3>
       {shown.length ? shown.map(x => (
         <button key={x._id} type="button" className={`mcard ${mid === x._id ? "on" : ""}`} onClick={() => openM(x._id)}>
           <b style={{ display: "block", color: "var(--navy)", fontWeight: 600 }}>{x.title}</b>
           <span className="sub">{x.refName || "Internal"} · {fd(x.date)}{x.time ? `, ${ampm(x.time)}` : ""} · {x.mode}{(x.sendLog || []).length ? ` · sent ${x.sendLog.length}×` : ""}{x.files?.length ? ` · ${x.files.length} document${x.files.length > 1 ? "s" : ""}` : ""}</span>{status(x)}
         </button>
-      )) : <div className="empty">{L.length ? "No meeting matches." : <>No meetings yet. Tap <b>+ New meeting</b>.</>}</div>}
+      )) : <div className="empty">{L.length ? "No meeting matches." : <>No meetings yet. Tap <b>+ Schedule a meeting</b>.</>}</div>}
     </section>
   );
 
   const head = (
     <>
       <h2 className="t">Meetings<span>.</span></h2>
-      <p className="lead">Write your notes during or after the meeting, attach photos of written notes, the whiteboard or screenshots, and get the minutes of meeting (MOM) ready to send on WhatsApp and email.</p>
+      <p className="lead">First schedule the meeting and send the invite. After the meeting, open it and add the MOM points, documents and photos, then send the minutes of meeting (MOM) on WhatsApp and email.</p>
     </>
   );
 
@@ -226,9 +237,9 @@ export default function Meetings() {
     <>{head}
       <div className="kpis">
         <div className="kpi"><span className="l">Meetings this month</span><span className="v">{L.filter(x => x.date.startsWith(ms)).length}</span><span className="s">{L.length} in total</span></div>
+        <div className="kpi"><span className="l">Upcoming</span><span className="v" style={{ color: "var(--pri)" }}>{L.filter(x => !isOver(x)).length}</span><span className="s">scheduled</span></div>
+        <div className="kpi"><span className="l">MOM points pending</span><span className="v" style={{ color: "var(--red)" }}>{L.filter(x => isOver(x) && !x.momTxt && !hasPoints(x)).length}</span><span className="s">meeting done, add the points</span></div>
         <div className="kpi"><span className="l">MOM sent</span><span className="v" style={{ color: "var(--ok)" }}>{L.filter(x => x.sentWa || x.sentMail).length}</span><span className="s">{allSends.length} sends recorded</span></div>
-        <div className="kpi"><span className="l">MOM ready, not sent</span><span className="v" style={{ color: "var(--pri)" }}>{L.filter(x => x.momTxt && !x.sentWa && !x.sentMail).length}</span></div>
-        <div className="kpi"><span className="l">Notes only</span><span className="v" style={{ color: "var(--amb)" }}>{L.filter(x => !x.momTxt).length}</span><span className="s">write the MOM</span></div>
       </div>
       <div className="grid2">
         <div>{list}</div>
@@ -238,12 +249,12 @@ export default function Meetings() {
         </section>
         <section className="card"><h3>How it works</h3><div className="pad">
           <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.9 }}>
-            <li>Write the points as you heard them. Short lines are fine.</li>
-            <li>Attach photos of handwritten notes, the whiteboard or screen captures.</li>
-            <li>Tap <b>Save and write the MOM</b> to get the summary, points, decisions and action items.</li>
-            <li>Check and edit, then send on WhatsApp or email with the ready template.</li>
+            <li><b>Schedule the meeting</b>: client, topic, date, time and link. Add the client's email to send the invite.</li>
+            <li>After the meeting, open it from <b>My meetings</b> and add the <b>MOM points</b>. Short lines are fine.</li>
+            <li>Attach the MOM document, photos of handwritten notes, the whiteboard or screen captures.</li>
+            <li>Tap <b>Save and write the MOM</b>, check it, then send it on WhatsApp or email with the ready template.</li>
           </ol>
-          <p className="sub">Minutes are laid out from your typed notes. Photos are saved with the meeting for reference.</p>
+          <p className="sub">The meeting is added to your timesheet once its MOM points are in. Photos are saved with the meeting for reference.</p>
         </div></section>
         </div>
       </div>
@@ -254,8 +265,9 @@ export default function Meetings() {
     <>{head}
       <div className="row" style={{ marginBottom: 12 }}><button type="button" className="btn sm" onClick={() => setMid("")}>All meetings</button></div>
       <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <section className="card"><h3>{m ? "Meeting notes" : "New meeting"}</h3>
-          <form className="pad" onSubmit={(e) => save(e, true)} key={mid}>
+        <section className="card"><h3>{m ? "Meeting" : "Schedule a meeting"} {m && status(m)}</h3>
+          <form className="pad" onSubmit={(e) => save(e, !m ? "schedule" : momOpen ? "mom" : "details")} key={mid}>
+            <div className="mt-step"><span>1</span> Meeting details</div>
             <div className="f"><label htmlFor="m1">Client or project</label><input id="m1" name="ref" type="text" list="m1l" defaultValue={m?.refName || ""} placeholder="Internal if empty" />
               <datalist id="m1l">{[...P.assigned.clients, ...P.assigned.projects].map(r => <option key={r.id} value={r.name} />)}</datalist></div>
             <div className="f"><label htmlFor="m2">Meeting about</label><input id="m2" name="title" type="text" required defaultValue={m?.title || ""} placeholder="UAT walkthrough, design review, monthly report..." /></div>
@@ -274,31 +286,57 @@ export default function Meetings() {
               <div className="f"><label htmlFor="m13">Client WhatsApp</label><input id="m13" name="cphone" type="tel" defaultValue={m?.clientPhone || ""} placeholder="98450 12345" /></div>
             </div>
             <div className="f"><label htmlFor="m14">Meeting link</label><input id="m14" name="link" type="url" defaultValue={m?.link || ""} placeholder="https://meet.google.com/..." /></div>
-            <div className="f"><label htmlFor="m9">Meeting notes{!m ? " (leave empty when planning a meeting)" : ""}</label><textarea id="m9" name="notes" rows={11} defaultValue={m?.notes || ""} placeholder="Write each point on a new line. Who said what, what was decided, who will do what and by when." /></div>
-            <div className="f"><label htmlFor="m11">MOM and documents (PDF, Word, Excel, images){files.length ? ` · ${files.length} attached` : ""}</label>
-              <div className="drop">
-                <input id="m11" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={e => { addDocs(e.target.files); e.target.value = ""; }} />
-                {upBusy > 0 && <span className="sub">Uploading {upBusy}…</span>}
-                <div className="mt-docs">{files.map((f, i) => (
-                  <span key={f.url} className="mt-doc"><a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>
-                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(L2 => L2.filter((_, j) => j !== i))}>×</button></span>
-                ))}</div>
+
+            {!m && (
+              <div className="row">
+                <button className="btn p lg" disabled={busy}>{busy ? "Saving…" : "Schedule meeting"}</button>
+                <button type="button" className="btn lg" disabled={busy} onClick={(e) => save(e, "invite")}>Schedule and email the invite</button>
               </div>
-            </div>
-            <div className="f"><label htmlFor="m10">Photos of written notes, whiteboard or screenshots{shots.length ? ` · ${shots.length} attached` : m?.imgCount && full !== m._id ? ` · loading ${m.imgCount}…` : ""}</label>
-              <div className="drop">
-                <input id="m10" type="file" accept="image/*" multiple onChange={e => { addShots(e.target.files); e.target.value = ""; }} />
-                <div className="thumbs">{shots.map((s, i) => (
-                  <span key={i} className="thumb"><img src={s} alt={`Attachment ${i + 1}`} /><button type="button" aria-label={`Remove image ${i + 1}`} onClick={() => setShots(L2 => L2.filter((_, j) => j !== i))}>×</button></span>
-                ))}</div>
-              </div>
-            </div>
-            <div className="row">
-              <button className="btn p lg" disabled={busy || upBusy > 0}>{busy ? "Saving…" : m?.momTxt ? "Save and rewrite the MOM" : "Save and write the MOM"}</button>
-              <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, false)}>Save notes only</button>
-              {!m && <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, false, true)}>Schedule and email the invite</button>}
-              {m && <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={async () => { if (await confirmBox({ title: "Delete this meeting?", text: "Its notes and minutes are deleted too.", ok: "Delete", danger: true })) { P.removeMeeting(m._id); setMid(""); } }}>Delete</button>}
-            </div>
+            )}
+
+            {m && !momOpen && (
+              <>
+                <div className="mt-step off"><span>2</span> MOM points, after the meeting</div>
+                <div className="alert am" style={{ marginBottom: 12 }}>
+                  This meeting is on <b>{fdw(m.date)}{m.time ? `, ${ampm(m.time)}` : ""}</b>. Open it here after the meeting to add the MOM points and documents.
+                  <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setEarly(m._id)}>The meeting is done</button>
+                </div>
+                <div className="row">
+                  <button className="btn p lg" disabled={busy}>{busy ? "Saving…" : "Save meeting details"}</button>
+                  <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={del}>Delete</button>
+                </div>
+              </>
+            )}
+
+            {m && momOpen && (
+              <>
+                <div className="mt-step"><span>2</span> MOM points, after the meeting</div>
+                <div className="f"><label htmlFor="m9">MOM points</label><textarea id="m9" name="notes" rows={11} defaultValue={m?.notes || ""} placeholder="Write each point on a new line. Who said what, what was decided, who will do what and by when." /></div>
+                <div className="f"><label htmlFor="m11">MOM and documents (PDF, Word, Excel, images){files.length ? ` · ${files.length} attached` : ""}</label>
+                  <div className="drop">
+                    <input id="m11" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={e => { addDocs(e.target.files); e.target.value = ""; }} />
+                    {upBusy > 0 && <span className="sub">Uploading {upBusy}…</span>}
+                    <div className="mt-docs">{files.map((f, i) => (
+                      <span key={f.url} className="mt-doc"><a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>
+                        <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(L2 => L2.filter((_, j) => j !== i))}>×</button></span>
+                    ))}</div>
+                  </div>
+                </div>
+                <div className="f"><label htmlFor="m10">Photos of written notes, whiteboard or screenshots{shots.length ? ` · ${shots.length} attached` : m?.imgCount && full !== m._id ? ` · loading ${m.imgCount}…` : ""}</label>
+                  <div className="drop">
+                    <input id="m10" type="file" accept="image/*" multiple onChange={e => { addShots(e.target.files); e.target.value = ""; }} />
+                    <div className="thumbs">{shots.map((s, i) => (
+                      <span key={i} className="thumb"><img src={s} alt={`Attachment ${i + 1}`} /><button type="button" aria-label={`Remove image ${i + 1}`} onClick={() => setShots(L2 => L2.filter((_, j) => j !== i))}>×</button></span>
+                    ))}</div>
+                  </div>
+                </div>
+                <div className="row">
+                  <button className="btn p lg" disabled={busy || upBusy > 0}>{busy ? "Saving…" : m.momTxt ? "Save and rewrite the MOM" : "Save and write the MOM"}</button>
+                  <button type="button" className="btn lg" disabled={busy || upBusy > 0} onClick={(e) => save(e, "points")}>Save points only</button>
+                  <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={del}>Delete</button>
+                </div>
+              </>
+            )}
           </form>
         </section>
         <div>
@@ -312,7 +350,7 @@ export default function Meetings() {
           )}
           {m && !mom && (
             <section className="card"><h3>Minutes of meeting</h3>
-              <div className="empty">After the meeting, write your notes on the left and tap <b>Save and write the MOM</b>. Then send the minutes with the ready email below.</div></section>
+              <div className="empty">{momOpen ? <>Add the MOM points on the left and tap <b>Save and write the MOM</b>. Then send the minutes with the ready email below.</> : <>After the meeting, add the MOM points here. Until then you can send the invite or a reminder below.</>}</div></section>
           )}
           {m ? (
             <>
@@ -338,7 +376,7 @@ export default function Meetings() {
             </>
           ) : (
             <section className="card"><h3>Send to the client</h3>
-              <div className="empty">Planning a meeting? Add the client's email and tap <b>Schedule and email the invite</b>. After the meeting, write the notes and tap <b>Save and write the MOM</b>.</div></section>
+              <div className="empty"><b>Step 1:</b> fill in the meeting details and tap <b>Schedule meeting</b>, or <b>Schedule and email the invite</b> to send it to the client.<br /><b>Step 2:</b> after the meeting, open it from My meetings and add the MOM points.</div></section>
           )}
         </div>
       </div>

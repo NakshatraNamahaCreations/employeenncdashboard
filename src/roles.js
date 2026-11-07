@@ -19,6 +19,7 @@ export const ROLES = {
 
 const DEV = ["app", "back", "web", "full", "other"];
 const SEO = ["seo", "seox"];
+const DM = ["seo", "seox", "ads"];   // the whole digital marketing team
 const ALL = Object.keys(ROLES);
 
 // c: true = logged against a client (SEO side); otherwise against a project
@@ -27,6 +28,14 @@ export const TY = {
   blog:     { l: "Blog published",      h: "Link to the live blog",                    r: SEO, c: true },
   gmb:      { l: "GMB post",            h: "Google Business Profile post",             r: SEO, c: true },
   onpage:   { l: "On-page SEO",         h: "Meta tags, schema, speed, content",        r: SEO, c: true },
+  webcontent:  { l: "Website content",       h: "Pages or sections written for a site",     r: SEO, c: true },
+  blogcontent: { l: "Blog content written",  h: "Draft written, before it is published",    r: SEO, c: true },
+  landing:     { l: "Landing page content",  h: "Copy for an ad or offer page",             r: DM, c: true },
+  campaign:    { l: "Campaign setup",        h: "New Google, Meta or other campaign",       r: DM, c: true },
+  social:      { l: "Social media posts scheduled", h: "Posts lined up on a planner",       r: [...DM, "gfx"], c: true },
+  position:    { l: "Position tracking",     h: "Keyword ranks checked and recorded",       r: SEO, c: true },
+  monthly:     { l: "Monthly report",        h: "The client's report for the month",        r: DM, c: true },
+  docs:        { l: "Documentation or reporting", h: "Documents, sheets or reports",        r: ALL },
   optimise: { l: "Campaign change",     h: "Bids, budget, ads, targeting",             r: ["ads"], c: true },
   negative: { l: "Negative keywords",   h: "Terms blocked to stop wasted spend",       r: ["ads"], c: true },
   newad:    { l: "New ad or campaign",  h: "Ad copy, ad group or campaign",            r: ["ads"], c: true },
@@ -77,5 +86,7 @@ export function metaTxt(e) {
   if (m.ver) out.push(`v${m.ver}`); if (m.pass != null) out.push(`${m.pass} passed, ${m.fail} failed`);
   if (m.bug) out.push(`${m.bug}${m.sev ? ` · ${m.sev}` : ""}${m.assignName ? ` · to ${m.assignName}` : ""}`);
   if (m.amt) out.push(`₹${(+m.amt).toLocaleString("en-IN")}`); if (m.mod) out.push(m.mod); if (m.terms) out.push(m.terms);
+  if (m.pages) out.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) out.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
+  if (m.kws) out.push(`${m.kws} keywords`); if (m.month) out.push(m.month);
   return out.join(" · ");
 }

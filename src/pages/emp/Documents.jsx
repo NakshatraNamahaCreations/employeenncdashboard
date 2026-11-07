@@ -107,7 +107,7 @@ function SendForm({ people, me, assigned, onSent }) {
         </div>
         <div className="f"><label htmlFor="dc3">Title</label><input id="dc3" name="title" type="text" required placeholder="Test report for login and checkout, build 1.4" /></div>
         <div className="f"><label htmlFor="dc4">Message</label><textarea id="dc4" name="text" rows={6} placeholder="What is in the files and what you need from them" /></div>
-        <div className="f"><label>Documents (PDF, Word, Excel, images, zip · up to 10, 25 MB each)</label><FilePick id="dc5" files={files} onChange={setFiles} /></div>
+        <div className="f"><label>Images and documents</label><FilePick id="dc5" files={files} onChange={setFiles} /></div>
         <div className="row"><button className="btn p lg" disabled={busy}><Send size={15} /> {busy ? "Sending…" : "Send"}</button></div>
       </form>
     </section>

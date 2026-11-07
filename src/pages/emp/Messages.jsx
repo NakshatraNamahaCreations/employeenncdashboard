@@ -1,3 +1,4 @@
+import Linkify from "../../Linkify";
 import { useEffect, useRef, useState } from "react";
 import { Send, ShieldCheck } from "lucide-react";
 import { usePortal } from "../../auth/store";
@@ -5,7 +6,8 @@ import { api } from "../../api";
 import { toast } from "../../toast";
 import { fdw } from "../../util";
 import { useNewMessage } from "../../ding";
-import { useLive, every } from "../../live";
+import { useLive, every, useTyping, sayTyping, typingText } from "../../live";
+import { Tick } from "../../Tick";
 
 const mine = (m) => m.from !== "admin";
 
@@ -24,6 +26,8 @@ export default function Messages() {
   const end = useRef(null);
   const { loadNotifs } = P;
   const refs = [...P.assigned.clients, ...P.assigned.projects];
+  const typingIn = useTyping((d) => (d.chat === "pm" && d.from === "admin" ? { chat: "pm", person: "admin" } : null));
+  const tp = typingIn("pm");
 
   useEffect(() => {
     let live = true;
@@ -77,20 +81,21 @@ export default function Messages() {
                 <div className="bub">
                   {m.from === "admin" && <b className="who">{m.by || "Admin"}</b>}
                   {m.refName && <span className="about">About {m.refName}</span>}
-                  <span className="txt">{m.text}</span>
-                  <small>{m.pending ? "sending…" : <>{tm(m.createdAt)}{m.from === "emp" ? (m.readAdmin ? " · seen" : " · sent") : ""}</>}</small>
+                  <span className="txt"><Linkify text={m.text} /></span>
+                  <small>{tm(m.createdAt)}{m.from === "emp" && <Tick pending={m.pending} seen={m.readAdmin} title={m.readAdmin ? `Seen${m.seenAt ? ` ${tm(m.seenAt)}` : ""}` : "Sent"} />}</small>
                 </div>
               </div>
             </div>
           ))}
         </div>
+        {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
         <form className="chat-f" onSubmit={send}>
           {refs.length > 0 && (
             <select value={ref} onChange={e => setRef(e.target.value)} aria-label="About">
               <option value="">General</option>{refs.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
             </select>
           )}
-          <textarea rows={1} value={text} onChange={e => setText(e.target.value)} placeholder="Write a message…" aria-label="Message"
+          <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "pm" }); }} placeholder="Write a message…" aria-label="Message"
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
           <button className="btn p" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
         </form>

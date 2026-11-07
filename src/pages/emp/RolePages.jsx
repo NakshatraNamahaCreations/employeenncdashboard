@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Linkify from "../../Linkify";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { UploadCloud, FileText, X } from "lucide-react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES, roleInfo, hasRole } from "../../roles";
@@ -273,6 +275,11 @@ const ST = {
 };
 const DEV_ST = [["open", "Open"], ["progress", "In progress"], ["info", "Needs more info"], ["fixed", "Fixed"], ["notbug", "Not a bug"]];
 const bugPill = (s) => (ST[s] ? <span className={`pill ${ST[s][1]}`}>{ST[s][0]}</span> : null);
+const hm = (d) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+// A new or reopened bug: has the developer opened it yet?
+const SeenPill = ({ m }) => (!["open", "reopened"].includes(m.status) ? null : m.seenAt
+  ? <span className="pill p-blue" title={`Opened by ${m.assignName || "the developer"}`}>Opened {hm(m.seenAt)}</span>
+  : <span className="pill p-gr">Not opened yet</span>);
 const fmtMins = (m) => (!m ? "" : m < 60 ? `${m} min` : `${Math.round(m / 6) / 10} h`);
 const isImg = (f) => /^image\//.test(f.type || "") || /\.(png|jpe?g|gif|webp)$/i.test(f.url);
 const fullUrl = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
@@ -291,29 +298,89 @@ function Files({ list }) {
   );
 }
 
-// Choose files; each one uploads straight away
+// Attach files: click to browse, drag them in, or paste (Ctrl+V) a copied screenshot or file.
+// Each one uploads straight away. A paste goes to the attach box nearest to where you are typing.
+const MAX_FILES = 10, MAX_MB = 25;
+const kb = (n) => (!n ? "" : n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const extOf = (f) => (String(f.name || f.url).split(".").pop() || "").slice(0, 4).toUpperCase();
+// the largest part of the page that holds this attach box and no other
+function scopeOf(el) {
+  let s = el;
+  while (s?.parentElement && s.tagName !== "FORM" && s.parentElement !== document.body && s.parentElement.querySelectorAll(".fp").length === 1) s = s.parentElement;
+  return s;
+}
+// a pasted screenshot is called "image.png"; give it a readable name
+const named = (f) => {
+  if (!/^image\.(png|jpe?g|gif|webp)$/i.test(f.name || "")) return f;
+  const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+  return new File([f], `Screenshot ${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}.${p2(d.getSeconds())}.${f.name.split(".").pop()}`, { type: f.type });
+};
+
 export function FilePick({ files, onChange, id }) {
   const [busy, setBusy] = useState(0);
-  const pick = async (e) => {
-    const L = [...e.target.files]; e.target.value = "";
+  const [over, setOver] = useState(false);
+  const zone = useRef(null);
+  const count = useRef(files.length);
+  useEffect(() => { count.current = files.length; }, [files.length]);
+
+  const add = useCallback(async (list) => {
+    let L = [...list].map(named);
+    const room = MAX_FILES - count.current;
+    if (room <= 0) { toast(`Up to ${MAX_FILES} files can be attached`); return; }
+    if (L.length > room) { toast(`Only ${room} more file${room > 1 ? "s" : ""} can be attached`); L = L.slice(0, room); }
     setBusy(n => n + L.length);
-    const out = [];
     for (const f of L) {
-      if (f.size > 25 * 1024 * 1024) { toast(`${f.name} is over 25 MB`); setBusy(n => n - 1); continue; }
-      try { out.push(await upload(f)); } catch (ex) { toast(ex.message); }
+      if (f.size > MAX_MB * 1048576) toast(`${f.name} is over ${MAX_MB} MB`);
+      else {
+        try { const d = await upload(f); onChange(prev => [...prev, { ...d, size: d.size || f.size }]); }
+        catch (ex) { toast(ex.message); }
+      }
       setBusy(n => n - 1);
     }
-    if (out.length) onChange(prev => [...prev, ...out]);
-  };
+  }, [onChange]);
+
+  // Ctrl+V with a copied image or file, anywhere in this form (text pastes work as usual)
+  useEffect(() => {
+    const onPaste = (e) => {
+      const el = zone.current;
+      if (!el) return;
+      const t = e.target instanceof Element ? e.target : document.body;
+      const mine = scopeOf(el).contains(t) || el.contains(document.activeElement) || (t === document.body && document.querySelectorAll(".fp").length === 1);
+      if (!mine) return;
+      const F = [...(e.clipboardData?.files || [])];
+      if (!F.length) return;
+      e.preventDefault();
+      add(F);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [add]);
+
+  const drop = (e) => { e.preventDefault(); setOver(false); if (e.dataTransfer?.files?.length) add(e.dataTransfer.files); };
   return (
-    <div className="bug-pick">
-      <label className="btn sm" htmlFor={id}>Attach images or documents</label>
-      <input id={id} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={pick} />
-      {busy > 0 && <span className="sub">Uploading {busy}…</span>}
-      {files.map((f, i) => (
-        <span key={f.url} className="bug-chip">{f.name}
-          <button type="button" aria-label={`Remove ${f.name}`} onClick={() => onChange(prev => prev.filter((_, j) => j !== i))}>×</button></span>
-      ))}
+    <div className="fp">
+      <label ref={zone} htmlFor={id} className={`fp-zone${over ? " over" : ""}`} tabIndex={0}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); document.getElementById(id)?.click(); } }}>
+        <span className="fp-ic"><UploadCloud size={22} /></span>
+        <span className="fp-t"><b>Drop files here, paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>, or <u>browse</u></b>
+          <small>Screenshots, PDF, Word, Excel or zip · up to {MAX_FILES} files, {MAX_MB} MB each</small></span>
+      </label>
+      <input id={id} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      {(files.length > 0 || busy > 0) && (
+        <div className="fp-list">
+          {files.map((f, i) => (
+            <div key={f.url} className="fp-item">
+              {isImg(f) ? <img src={fileUrl(f.url)} alt="" /> : <span className="fp-doc"><FileText size={18} /><em>{extOf(f)}</em></span>}
+              <span className="fp-name"><a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" title={f.name}>{f.name}</a><small>{kb(f.size)}</small></span>
+              <button type="button" className="fp-x" aria-label={`Remove ${f.name}`} onClick={() => onChange(prev => prev.filter((_, j) => j !== i))}><X size={14} /></button>
+            </div>
+          ))}
+          {Array.from({ length: busy }, (_, i) => (
+            <div key={`u${i}`} className="fp-item up"><span className="fp-doc"><span className="fp-spin" /></span><span className="fp-name"><b>Uploading…</b></span></div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -325,11 +392,12 @@ function BugLi({ b, onOpen, children }) {
       <div className="x">
         <span className="tag">{m.bug}</span><b>{b.title}</b>
         <span className="sub">{[b.refName, m.mod, m.sev, fmtMins(m.mins), m.assignName ? `to ${m.assignName}` : "", b.account?.name ? `by ${b.account.name}` : "", fd(b.date)].filter(Boolean).join(" · ")}</span>
-        {m.steps && <span className="sub">Steps: {m.steps}</span>}
-        {m.note && <span className="sub">Note: {m.note}</span>}
+        {m.steps && <span className="sub">Steps: <Linkify text={m.steps} /></span>}
+        {m.note && <span className="sub">Note: <Linkify text={m.note} /></span>}
+        {b.url && <a className="url" href={b.url} target="_blank" rel="noopener noreferrer">{b.url.replace(/^https?:\/\//, "")}</a>}
         {(m.files?.length > 0 || nc > 0) && <span className="sub">{[m.files?.length ? `${m.files.length} attachment${m.files.length > 1 ? "s" : ""}` : "", nc ? `${nc} comment${nc > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")}</span>}
       </div>
-      {bugPill(m.status)}{children}
+      {bugPill(m.status)}<SeenPill m={m} />{children}
       {onOpen && <button type="button" className="btn sm" onClick={() => onOpen(b)}>View</button>}
     </div>
   );
@@ -351,7 +419,7 @@ function TestLi({ t }) {
 }
 
 // A bug with its attachments, status and the comments between tester and developer
-function BugView({ bug, tester, onClose, act }) {
+function BugView({ bug, tester, onClose, act, onSeen }) {
   const m = bug.meta || {};
   const [st, setSt] = useState(m.status === "reopened" ? "progress" : m.status);
   const [text, setText] = useState("");
@@ -360,6 +428,14 @@ function BugView({ bug, tester, onClose, act }) {
   const [busy, setBusy] = useState(false);
   const thread = (m.comments || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
   const devCan = !tester && m.status !== "verified";
+  // the developer opening it tells the tester it has been seen
+  const meId = usePortal().session.user.id;
+  const seenOnce = useRef(false);
+  useEffect(() => {
+    if (m.assign !== meId || m.seenAt || seenOnce.current || !["open", "reopened"].includes(m.status)) return;
+    seenOnce.current = true;
+    api(`/bugs/${bug._id}`, { method: "PATCH", body: { action: "seen" } }).then(() => onSeen?.(), () => {});
+  }, [meId, m.assign, m.seenAt, m.status, bug._id, onSeen]);
   const send = async (body, ok) => {
     setBusy(true);
     const r = await act(bug._id, { ...body, files }, ok);
@@ -379,11 +455,11 @@ function BugView({ bug, tester, onClose, act }) {
     <Modal title={`${m.bug} · ${bug.title}`} onClose={onClose}>
       <div className="bug-view">
         <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          {bugPill(m.status)}{m.sev && <span className={`pill ${m.sev === "High" ? "p-red" : m.sev === "Low" ? "p-gr" : "p-amb"}`}>{m.sev}</span>}
+          {bugPill(m.status)}<SeenPill m={m} />{m.sev && <span className={`pill ${m.sev === "High" ? "p-red" : m.sev === "Low" ? "p-gr" : "p-amb"}`}>{m.sev}</span>}
           {m.mins > 0 && <span className="pill p-gr">Time: {fmtMins(m.mins)}</span>}
         </div>
         <p className="sub" style={{ marginTop: 0 }}>{[bug.refName, m.mod, b4(bug), m.assignName ? `to ${m.assignName}` : "", fd(bug.date)].filter(Boolean).join(" · ")}</p>
-        {m.steps && <p className="bug-steps">{m.steps}</p>}
+        {m.steps && <p className="bug-steps"><Linkify text={m.steps} /></p>}
         {bug.url && <a className="url" href={bug.url} target="_blank" rel="noopener noreferrer">{bug.url.replace(/^https?:\/\//, "")}</a>}
         <Files list={m.files} />
 
@@ -392,7 +468,7 @@ function BugView({ bug, tester, onClose, act }) {
           {thread.length ? thread.map((c, i) => (
             <div key={i} className={`bug-c ${c.by === m.assign ? "dev" : "tst"}`}>
               <div className="bc-h"><b>{c.name}</b>{c.status && <> changed the status to {bugPill(c.status)}</>}<span>{fdt(c.at)}</span></div>
-              {c.text && <div className="bc-t">{c.text}</div>}
+              {c.text && <div className="bc-t"><Linkify text={c.text} /></div>}
               <Files list={c.files} />
             </div>
           )) : <div className="empty">No updates yet.</div>}
@@ -576,7 +652,7 @@ function Bugs() {
         </>
       )}
 
-      {view && <BugView key={view._id} bug={view} tester={tester} onClose={() => setViewId(null)} act={act} />}
+      {view && <BugView key={view._id} bug={view} tester={tester} onClose={() => setViewId(null)} act={act} onSeen={reload} />}
     </>
   );
 }

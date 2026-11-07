@@ -5,6 +5,7 @@ import { roleInfo, TY } from "../../roles";
 import { api } from "../../api";
 import { EntryLi, SubmitDay, Blocked, TaskRef } from "./EmpPages";
 import { ProjectCard } from "./Projects";
+import TodayPlan from "./TodayPlan";
 import { useProjects, byLive } from "./useProjects";
 import { today, T, fd, fdw, h1, pct, weekStart, greet, parse, iso, ampm } from "../../util";
 
@@ -56,12 +57,14 @@ export default function DevDay() {
   const openBugs = bugs.filter(b => ["open", "reopened", "progress", "info"].includes(b.meta?.status));
   const projects = P.assigned.projects;
   const live = projects.filter(p => !p.completed && p.stage !== "Project Completed");
-  const meetToday = ev.filter(e => e.date === today());
+  const isMeet = (e) => e.kind === "meeting" || e.kind === "client";
+  const meetToday = ev.filter(e => e.date === today() && isMeet(e));
   const due = P.tasks.filter(t => t.status !== "done" && t.due <= today());
   const bl = P.blockers.filter(b => !b.resolved);
 
   const pickL = P.entries.filter(e => e.date === pick);
-  const pickEv = ev.filter(e => e.date === pick);
+  // the day's own record already says "Submitted"; the rest are listed with what they are
+  const pickEv = ev.filter(e => e.date === pick && e.kind !== "submitted");
   const pickRec = P.days.find(d => d.date === pick);
 
   return (
@@ -117,6 +120,7 @@ export default function DevDay() {
           </section>
         </div>
         <div>
+          <TodayPlan refs={projects} yesterday={last && last.date < today() ? last.plan : ""} />
           <section className="card"><h3>Meetings today <small>{meetToday.length}</small></h3>
             {meetToday.length ? meetToday.map(m => <MeetLi key={`${m.src}${m.id}`} m={m} />) : <div className="empty">No meetings today.</div>}
           </section>
@@ -152,7 +156,8 @@ export default function DevDay() {
             {DOW.map(d => <div key={d} className="dv-dow">{d}</div>)}
             {monthGrid(ym).map((d, i) => {
               if (!d) return <div key={`x${i}`} />;
-              const L = P.entries.filter(e => e.date === d), hh = hrsOf(L), m = ev.filter(e => e.date === d).length;
+              const L = P.entries.filter(e => e.date === d), hh = hrsOf(L), E = ev.filter(e => e.date === d);
+              const m = E.filter(isMeet).length, tk = E.filter(e => e.kind === "task").length, up = E.filter(e => !isMeet(e) && e.kind !== "task" && e.kind !== "submitted").length;
               const sub = P.days.some(x => x.date === d), fut = d > today(), sun = parse(d).getDay() === 0;
               const st = sub ? "ok" : fut || sun ? "" : d === today() ? "open" : d >= T(-70) ? "miss" : "";
               return (
@@ -160,6 +165,8 @@ export default function DevDay() {
                   <span className="n">{+d.slice(8)}</span>
                   {hh > 0 && <span className="h">{h1(hh)}h</span>}
                   {m > 0 && <span className="m">{m} meeting{m > 1 ? "s" : ""}</span>}
+                  {tk > 0 && <span className="m tk">{tk} task{tk > 1 ? "s" : ""}</span>}
+                  {up > 0 && <span className="m up">{up} update{up > 1 ? "s" : ""}</span>}
                 </button>
               );
             })}
@@ -181,12 +188,17 @@ export default function DevDay() {
   );
 }
 
+// what each calendar item is (the calendar has meetings, tasks, deliveries and project updates)
+const EV_LABEL = { meeting: "Meeting", client: "Client meeting", task: "Task", delivery: "Delivery", start: "Project start", stage: "Project update", release: "Build or deploy", test: "Testing", bug: "Bug", fix: "Bug fixed", work: "Work" };
+const kindOf = (m) => m.kind || (m.src === "crm" ? "client" : "meeting");
+
 function MeetLi({ m }) {
   return (
     <div className="li">
-      <div className="x"><span className="tag">{m.src === "crm" ? "Client meeting" : TY.meeting.l.split(" ")[0]}</span><b>{m.title}</b>
-        <span className="sub">{[m.time ? ampm(m.time) : "All day", m.refName, m.mode].filter(Boolean).join(" · ")}</span>
+      <div className="x"><span className={`tag ev-${kindOf(m)}`}>{EV_LABEL[kindOf(m)] || "Event"}</span><b>{m.title}</b>
+        <span className="sub">{[m.time ? ampm(m.time) : kindOf(m) === "meeting" || kindOf(m) === "client" ? "All day" : "", m.refName, m.mode, kindOf(m) === "task" ? m.text : "", m.done ? "done" : ""].filter(Boolean).join(" · ")}</span>
         {m.link && <a className="url" href={m.link} target="_blank" rel="noopener noreferrer">{m.link.replace(/^https?:\/\//, "")}</a>}</div>
+      {kindOf(m) === "task" && !m.done && <Link className="btn sm" to="/tasks">Open</Link>}
       {m.src === "portal" && (m.mom ? <span className="pill p-ok">MOM written</span> : <Link className="btn sm" to="/meetings">Write MOM</Link>)}
     </div>
   );
