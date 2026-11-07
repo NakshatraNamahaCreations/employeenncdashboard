@@ -18,40 +18,56 @@ export const ROLES = {
 };
 
 const DEV = ["app", "back", "web", "full", "other"];
-const SEO = ["seo", "seox"];
 const DM = ["seo", "seox", "ads"];   // the whole digital marketing team
 const ALL = Object.keys(ROLES);
 
-// c: true = logged against a client (SEO side); otherwise against a project
+// The groups the work types are shown in on Log work
+export const GROUPS = [
+  ["seo", "SEO and content"], ["gads", "Google Ads"], ["meta", "Meta Ads and social media"], ["rep", "Reports and tracking"],
+  ["dev", "Development"], ["design", "Design"], ["test", "Testing"], ["acc", "Accounts"], ["gen", "Meetings and other work"],
+];
+
+// c: true = logged against a client (SEO side); otherwise against a project. g: the group it is shown in.
 export const TY = {
-  backlink: { l: "Backlinks",           h: "Paste one or more live links",             r: SEO, c: true },
-  blog:     { l: "Blog published",      h: "Link to the live blog",                    r: SEO, c: true },
-  gmb:      { l: "GMB post",            h: "Google Business Profile post",             r: SEO, c: true },
-  onpage:   { l: "On-page SEO",         h: "Meta tags, schema, speed, content",        r: SEO, c: true },
-  webcontent:  { l: "Website content",       h: "Pages or sections written for a site",     r: SEO, c: true },
-  blogcontent: { l: "Blog content written",  h: "Draft written, before it is published",    r: SEO, c: true },
-  landing:     { l: "Landing page content",  h: "Copy for an ad or offer page",             r: DM, c: true },
-  campaign:    { l: "Campaign setup",        h: "New Google, Meta or other campaign",       r: DM, c: true },
-  social:      { l: "Social media posts scheduled", h: "Posts lined up on a planner",       r: [...DM, "gfx"], c: true },
-  position:    { l: "Position tracking",     h: "Keyword ranks checked and recorded",       r: SEO, c: true },
-  monthly:     { l: "Monthly report",        h: "The client's report for the month",        r: DM, c: true },
-  docs:        { l: "Documentation or reporting", h: "Documents, sheets or reports",        r: ALL },
-  optimise: { l: "Campaign change",     h: "Bids, budget, ads, targeting",             r: ["ads"], c: true },
-  negative: { l: "Negative keywords",   h: "Terms blocked to stop wasted spend",       r: ["ads"], c: true },
-  newad:    { l: "New ad or campaign",  h: "Ad copy, ad group or campaign",            r: ["ads"], c: true },
-  feature:  { l: "Feature or module",   h: "Commit or pull request link",              r: DEV },
-  page:     { l: "Page built",          h: "Staging page link",                        r: ["web", "full"] },
-  build:    { l: "App build",           h: "APK or TestFlight link",                   r: ["app"] },
-  deploy:   { l: "Deployment",          h: "Staging or live link",                     r: ["web", "back", "full"] },
-  bugfix:   { l: "Bug fixed",           h: "Commit link for the fix",                  r: DEV },
-  screen:   { l: "Screens designed",    h: "Figma link",                               r: ["ux"] },
-  revision: { l: "Design revision",     h: "Changes the client asked for",             r: ["ux"] },
-  poster:   { l: "Poster or creative",  h: "For SEO and social clients",               r: ["gfx", "ux"], c: true },
-  test:     { l: "Test run",            h: "Cases passed and failed",                  r: ["test"] },
-  bug:      { l: "Raise a bug",         h: "Assign it to a developer",                 r: ["test"] },
-  invoice:  { l: "Invoice or payment",  h: "Invoice sent or payment received",         r: ["acc"] },
-  meeting:  { l: "Meeting notes and MOM", h: "Notes, photos, minutes to send",         r: ALL, go: "/meetings" },
-  other:    { l: "Other work",          h: "Anything else you worked on",              r: ALL },
+  // SEO and content
+  webcontent:  { g: "seo", l: "Website content",       h: "Pages or sections written for a site",       r: DM, c: true },
+  blogcontent: { g: "seo", l: "Blog content written",  h: "Draft written, before it goes live",         r: DM, c: true },
+  blog:        { g: "seo", l: "Blog published",        h: "Link to the live blog",                      r: DM, c: true },
+  landing:     { g: "seo", l: "Landing page content",  h: "Copy for an ad or offer page",               r: DM, c: true },
+  backlink:    { g: "seo", l: "Backlinks",             h: "Paste one or more live links",               r: DM, c: true },
+  gmb:         { g: "seo", l: "GMB post",              h: "Google Business Profile post",               r: DM, c: true },
+  onpage:      { g: "seo", l: "On-page SEO",           h: "Meta tags, schema, speed, content",          r: DM, c: true },
+  kwresearch:  { g: "seo", l: "Keyword research",      h: "Keywords found for a client, page or ad",    r: DM, c: true },
+  // Google Ads
+  campaign:    { g: "gads", l: "Campaign setup",       h: "New Search, PMax, Display or YouTube campaign", r: DM, c: true },
+  optimise:    { g: "gads", l: "Campaign or ad changes", h: "Bids, budget, ads, targeting",             r: DM, c: true },
+  newad:       { g: "gads", l: "New ad or ad group",   h: "Ad copy, ad group or extensions",            r: DM, c: true },
+  negative:    { g: "gads", l: "Negative keywords",    h: "Terms blocked to stop wasted spend",         r: DM, c: true },
+  // Meta Ads and social media
+  metaads:     { g: "meta", l: "Meta Ads",             h: "Facebook and Instagram campaign set up or changed", r: DM, c: true },
+  social:      { g: "meta", l: "Social media posts",   h: "Posts created, scheduled or published",      r: [...DM, "gfx"], c: true },
+  // Reports and tracking
+  position:    { g: "rep", l: "Position tracking",     h: "Keyword ranks checked and recorded",         r: DM, c: true },
+  monthly:     { g: "rep", l: "Monthly report",        h: "The client's report for the month",          r: DM, c: true },
+  docs:        { g: "rep", l: "Documentation or reporting", h: "Documents, sheets or reports",          r: ALL },
+  // Development
+  feature:  { g: "dev", l: "Feature or module",   h: "Commit or pull request link",              r: DEV },
+  page:     { g: "dev", l: "Page built",          h: "Staging page link",                        r: ["web", "full"] },
+  build:    { g: "dev", l: "App build",           h: "APK or TestFlight link",                   r: ["app"] },
+  deploy:   { g: "dev", l: "Deployment",          h: "Staging or live link",                     r: ["web", "back", "full"] },
+  bugfix:   { g: "dev", l: "Bug fixed",           h: "Commit link for the fix",                  r: DEV },
+  // Design
+  screen:   { g: "design", l: "Screens designed",    h: "Figma link",                               r: ["ux"] },
+  revision: { g: "design", l: "Design revision",     h: "Changes the client asked for",             r: ["ux"] },
+  poster:   { g: "design", l: "Poster or creative",  h: "For SEO and social clients",               r: ["gfx", "ux"], c: true },
+  // Testing
+  test:     { g: "test", l: "Test run",            h: "Cases passed and failed",                  r: ["test"] },
+  bug:      { g: "test", l: "Raise a bug",         h: "Assign it to a developer",                 r: ["test"] },
+  // Accounts
+  invoice:  { g: "acc", l: "Invoice or payment",  h: "Invoice sent or payment received",         r: ["acc"] },
+  // Meetings and other work
+  meeting:  { g: "gen", l: "Meeting notes and MOM", h: "Notes, photos, minutes to send",         r: ALL, go: "/meetings" },
+  other:    { g: "gen", l: "Other work",          h: "Anything else you worked on",              r: ALL },
 };
 
 // Work types for one role or for all of a person's roles
@@ -88,5 +104,6 @@ export function metaTxt(e) {
   if (m.amt) out.push(`₹${(+m.amt).toLocaleString("en-IN")}`); if (m.mod) out.push(m.mod); if (m.terms) out.push(m.terms);
   if (m.pages) out.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) out.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) out.push(`${m.kws} keywords`); if (m.month) out.push(m.month);
+  if (m.files?.length) out.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return out.join(" · ");
 }

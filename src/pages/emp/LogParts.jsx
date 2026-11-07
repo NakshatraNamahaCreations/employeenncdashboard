@@ -1,5 +1,6 @@
 import { MoreHorizontal, CheckCircle2, Circle, Clock, Trash2, ExternalLink, Lock, Lightbulb } from "lucide-react";
-import { TY, metaTxt } from "../../roles";
+import { TY, GROUPS, metaTxt } from "../../roles";
+import { fileUrl } from "../../api";
 import { TY_IC } from "./workIcons";
 import { h1, pct } from "../../util";
 
@@ -7,6 +8,13 @@ import { h1, pct } from "../../util";
 const TARGET = 8, MIN = 7;
 
 const TIPS = {
+  kwresearch: ["Say what the research was for: a page, a blog or an ad campaign.", "Attach the keyword sheet or add its link."],
+  campaign: ["Pick the campaign type and the daily budget.", "Attach a screenshot of the campaign if there is no link."],
+  optimise: ["Say what changed and why: bids, budget, ads or targeting.", "A before and after screenshot helps."],
+  metaads: ["Pick what was done: new campaign, creative, audience or budget.", "Attach a screenshot from Ads Manager."],
+  social: ["Say how many posts and for which platform.", "Add the planner link, or attach the creatives or a screen recording."],
+  position: ["Say how many keywords you checked.", "Attach the rank sheet or add its link."],
+  monthly: ["Pick the month the report is for.", "Attach the report or add its link."],
   backlink: ["Paste only live links you can open now.", "One line per link. Time is for all links together.", "Add the target keyword so the SEO report can match it."],
   blog: ["Log after the blog is published, with the live link.", "Add the main keyword and word count."],
   gmb: ["Paste the post link from Google Business Profile.", "One entry per post."],
@@ -54,17 +62,25 @@ export function DayPanel({ hrs, items, submitted, onSubmit, onLog, extra = 0 }) 
 }
 
 export function TypeTiles({ types, onPick, disabled }) {
+  const groups = GROUPS.map(([g, l]) => [g, l, types.filter(([, t]) => (t.g || "gen") === g)]).filter(x => x[2].length);
   return (
-    <div className="lw-types">
-      {types.map(([k, t]) => {
-        const Ic = TY_IC[k] || MoreHorizontal;
-        return (
-          <button key={k} type="button" className="lw-type" disabled={disabled && !t.go} onClick={() => onPick(k)}>
-            <span className={`lw-ti t-${k}`}><Ic size={18} /></span>
-            <span><b>{t.l}</b><small>{t.h}</small></span>
-          </button>
-        );
-      })}
+    <div className="lw-groups">
+      {groups.map(([g, l, L]) => (
+        <div key={g} className={`lw-group g-${g}`}>
+          <h4 className="lw-gh"><span>{l}</span><small>{L.length}</small></h4>
+          <div className="lw-types">
+            {L.map(([k, t]) => {
+              const Ic = TY_IC[k] || MoreHorizontal;
+              return (
+                <button key={k} type="button" className="lw-type" disabled={disabled && !t.go} onClick={() => onPick(k)}>
+                  <span className={`lw-ti t-${k}`}><Ic size={18} /></span>
+                  <span><b>{t.l}</b><small>{t.h}</small></span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -87,7 +103,8 @@ export function TodaySheet({ list, onDelete, locked }) {
               <td><div className="lw-w"><span className={`lw-ti sm t-${e.type}`}><Ic size={14} /></span>
                 <span><b>{e.title}</b>{e.meta?.extra && <> <span className="pill p-extra">Extra work</span></>}<small>{[TY[e.type]?.l || (e.type === "adsreport" ? "Daily ads report" : e.type), metaTxt(e)].filter(Boolean).join(" · ")}</small></span></div></td>
               <td>{e.refName || <span className="sub">Internal</span>}</td>
-              <td>{e.url ? <a className="lw-link" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "").slice(0, 34)} <ExternalLink size={11} /></a> : <span className="sub">-</span>}</td>
+              <td>{e.url ? <a className="lw-link" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "").slice(0, 34)} <ExternalLink size={11} /></a> : !e.meta?.files?.length && <span className="sub">-</span>}
+                {e.meta?.files?.map(f => <a key={f.url} className="lw-link lw-file" href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" title={f.name}>{f.name.slice(0, 30)}</a>)}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{h1(e.hrs)}</td>
               <td style={{ textAlign: "right" }}>{canDel(e) && <button type="button" className="iconbtn sm" aria-label="Delete entry" onClick={() => onDelete(e._id)}><Trash2 size={14} /></button>}</td>
             </tr>

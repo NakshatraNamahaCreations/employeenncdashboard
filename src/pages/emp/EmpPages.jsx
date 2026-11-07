@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES, TY, typesFor, metaTxt, roleInfo, rolesOf, hasRole } from "../../roles";
-import { api } from "../../api";
+import { api, fileUrl } from "../../api";
+import { FilePick } from "../../FilePick";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
 import Modal from "../../Modal";
@@ -23,6 +24,7 @@ export function EntryLi({ e, onDelete }) {
         <span className="tag">{TY[e.type]?.l || (e.type === "adsreport" ? "Daily ads report" : e.type)}</span><b>{e.title}</b>
         <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
         {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}
+        {e.meta?.files?.length > 0 && <span className="lw-files">{e.meta.files.map(f => <a key={f.url} className="lw-file" href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>)}</span>}
       </div>
       <span className="sub" style={{ whiteSpace: "nowrap" }}>{h1(e.hrs)} h</span>
       {onDelete && <button type="button" className="btn sm" onClick={() => onDelete(e._id)}>Delete</button>}
@@ -201,10 +203,10 @@ function Fields({ type, devs }) {
       <Area name="urls" label="Backlink URLs, one per line" rows={5} required placeholder="https://medium.com/@nnc/destination-wedding-guide" />
       <div className="g3"><Inp name="kw" label="Keyword targeted" /><Sel name="btype" label="Type" opts={["Guest post", "Directory listing", "Business profile", "Article submission", "Social bookmark", "Image submission", "Press release"]} /><Inp name="da" label="Domain authority (DA)" type="number" min="0" max="100" placeholder="45" /></div>
     </>);
-    case "blog": return (<><Inp name="title" label="Blog title" required /><Inp name="url" label="Live blog link" type="url" required placeholder="https://" /><div className="g2"><Inp name="kw" label="Keyword targeted" /><Inp name="words" label="Word count" type="number" min="100" placeholder="1200" /></div></>);
+    case "blog": return (<><Inp name="title" label="Blog title" required /><Inp name="url" label="Live blog link" type="url" placeholder="https://" /><div className="g2"><Inp name="kw" label="Keyword targeted" /><Inp name="words" label="Word count" type="number" min="100" placeholder="1200" /></div></>);
     case "gmb": return (<><Inp name="title" label="Post headline" required /><Inp name="url" label="Post link" placeholder="g.page/..." /><div className="g2"><Sel name="gtype" label="Post type" opts={["Update", "Offer", "Event", "Photo"]} /><Inp name="kw" label="Keyword" /></div></>);
     case "onpage": return (<><Inp name="title" label="What was changed" required placeholder="Meta titles updated on 6 service pages" /><Inp name="url" label="Page link" /></>);
-    case "optimise": case "newad": return (<><Inp name="camp" label="Campaign" required /><Inp name="title" label="What did you change" required /></>);
+    case "optimise": case "newad": return (<><Inp name="camp" label="Campaign" required /><Inp name="title" label={type === "newad" ? "What was added" : "What did you change"} required placeholder={type === "newad" ? "2 new responsive search ads in Implants ad group" : "Raised budget to ₹1,500, paused 3 low-CTR ads"} /></>);
     case "negative": return (<><Inp name="camp" label="Campaign" required /><Area name="terms" label="Negative keywords added" required placeholder="free, jobs, salary" /></>);
     case "feature": case "page": case "deploy": case "build": case "bugfix": return (<>
       {mod}<Inp name="title" label="What was done" required />
@@ -216,7 +218,7 @@ function Fields({ type, devs }) {
       <div className="g2"><Inp name="url" label="Figma link" /><Inp name="screens" label="Number of screens" type="number" min="1" defaultValue="1" /></div>
       <label className="row sub" style={{ marginBottom: 14 }}><input type="checkbox" name="send" defaultChecked /> Sent to the client for approval</label>
     </>);
-    case "poster": return (<><Inp name="title" label="What was designed" required placeholder="Diwali offer post" /><div className="g2"><Inp name="url" label="Image or Drive link" required /><Sel name="platform" label="For" opts={["Instagram", "Facebook", "GMB", "LinkedIn", "Print"]} /></div></>);
+    case "poster": return (<><Inp name="title" label="What was designed" required placeholder="Diwali offer post" /><div className="g2"><Inp name="url" label="Image or Drive link" /><Sel name="platform" label="For" opts={["Instagram", "Facebook", "GMB", "LinkedIn", "Print"]} /></div></>);
     case "test": return (<>{mod}<Inp name="title" label="What was tested" required /><div className="g3"><Inp name="pass" label="Cases passed" type="number" min="0" required /><Inp name="fail" label="Cases failed" type="number" min="0" defaultValue="0" required /><Inp name="url" label="Test sheet link" /></div></>);
     case "bug": return (<>
       {mod}<Inp name="title" label="What is wrong" required placeholder="Checkout total wrong when coupon applied" />
@@ -233,9 +235,16 @@ function Fields({ type, devs }) {
     case "landing": return (<><Inp name="title" label="Landing page" required placeholder="Diwali offer page, Ads campaign" />
       <Inp name="url" label="Document or page link" />
       <div className="g2"><Inp name="kw" label="Main keyword or offer" /><Inp name="words" label="Word count" type="number" min="0" /></div></>);
-    case "campaign": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="Platform" opts={["Google Ads", "Meta Ads", "LinkedIn Ads", "YouTube Ads", "Other"]} /></div>
-      <Inp name="title" label="What was set up" required placeholder="Search campaign, 3 ad groups, 12 ads" />
-      <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="url" label="Link (optional)" /></div></>);
+    case "campaign": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="Campaign type" opts={["Google Ads · Search", "Google Ads · Performance Max", "Google Ads · Display", "Google Ads · YouTube", "Google Ads · Demand Gen", "Google Ads · Shopping", "Google Ads · Call"]} /></div>
+      <Inp name="title" label="What was set up" required placeholder="3 ad groups, 12 ads, call and sitelink extensions" />
+      <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="kw" label="Main keywords or audience" /></div>
+      <Inp name="url" label="Link (optional)" /></>);
+    case "kwresearch": return (<><Inp name="title" label="Research for" required placeholder="Dental implant pages / Diwali Google Ads campaign" />
+      <div className="g2"><Inp name="kws" label="Keywords found" type="number" min="1" /><Inp name="kw" label="Main keyword" /></div>
+      <Inp name="url" label="Keyword sheet link" placeholder="Google Sheet link" /></>);
+    case "metaads": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="What was done" opts={["Meta · New campaign", "Meta · Ad or creative change", "Meta · Audience change", "Meta · Budget change", "Meta · Lead form", "Meta · Boosted post"]} /></div>
+      <Inp name="title" label="Details" required placeholder="Lead campaign for Bangalore, 2 ad sets, 4 creatives" />
+      <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="url" label="Ads Manager link (optional)" /></div></>);
     case "social": return (<><Inp name="title" label="Posts scheduled" required placeholder="November festive posts" />
       <div className="g3"><Sel name="platform" label="Platform" opts={["Instagram", "Facebook", "Instagram and Facebook", "LinkedIn", "YouTube", "X (Twitter)", "GMB"]} /><Inp name="posts" label="Number of posts" type="number" min="1" defaultValue="1" /><Inp name="url" label="Planner or Drive link" /></div></>);
     case "position": return (<><Inp name="title" label="What was tracked" required placeholder="Weekly rank check, top 20 keywords" />
@@ -257,12 +266,14 @@ export function LogWork() {
   const [devs, setDevs] = useState([]);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [proof, setProof] = useState([]);            // screenshots, videos or files for this entry
   const nav = useNavigate();
   const locked = P.days.some(d => d.date === today());
   const todayL = P.entries.filter(e => e.date === today());
   const pickType = (k) => {
     if (TY[k].go) { nav(TY[k].go); return; }
     if (k === "bug") api("/developers").then(j => setDevs(j.data)).catch(() => setDevs([]));
+    setProof([]);
     setType(k);
   };
   const onClients = !!TY[type]?.c && picks.has("clients");
@@ -278,12 +289,15 @@ export function LogWork() {
     if (meta.month) meta.month = new Date(`${meta.month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
     if (type === "bug" && d.assign) meta.assignName = devs.find(x => x.id === d.assign)?.name || "";
     if (type === "screen" || type === "revision") meta.send = !!d.send;
+    if (proof.length) meta.files = proof;
+    // work that needs proof: a link, or a screenshot or video
+    if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) { toast("Add the link, or attach a screenshot or video"); return; }
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
     let items;
     if (type === "backlink") {
       items = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean).map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u), meta }));
     } else {
-      const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : type === "campaign" ? `${d.camp}: ${d.title}` : d.title;
+      const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${d.title}` : d.title;
       items = [{ title, url: url(d.url), meta }];
     }
     const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;
@@ -292,7 +306,7 @@ export function LogWork() {
     const r = await P.addWork({ type, date: d.date, refType: refType || "", refId: refId || "", hrs: Math.round(hrs * 100) / 100, items },
       type === "backlink" ? `${items.length} backlink${items.length > 1 ? "s" : ""} saved` : type === "bug" ? "Bug sent to the developer" : `${TY[type].l} saved`);
     setBusy(false);
-    if (r) setType("");
+    if (r) { setType(""); setProof([]); }
   };
 
   const hToday = hoursOn(P.entries, today());
@@ -344,6 +358,10 @@ export function LogWork() {
                 opts={[...(optional ? [["", "Internal / none"]] : []), ...both.map(([k, x]) => [`${k}:${x.id}`, x.name])]} />
               <div className="lw-sec"><span className="lw-n">2</span><b>What you did</b></div>
               <Fields type={type} devs={devs} />
+              {type !== "bug" && (
+                <div className="f"><label>Screenshots, video or files {["blog", "poster"].includes(type) ? "(or add the link above)" : "(optional)"}</label>
+                  <FilePick id="lw-proof" files={proof} onChange={setProof} hint="No link? Paste a screenshot (Ctrl+V), drop a screen recording, or attach the file." /></div>
+              )}
               <div className="lw-sec"><span className="lw-n">3</span><b>Time</b></div>
               <div className="g2">
                 <div className="f"><label htmlFor="i-hh">Time spent</label>
