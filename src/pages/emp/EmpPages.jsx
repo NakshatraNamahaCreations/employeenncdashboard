@@ -24,6 +24,7 @@ export function EntryLi({ e, onDelete }) {
         <span className="tag">{TY[e.type]?.l || (e.type === "adsreport" ? "Daily ads report" : e.type)}</span><b>{e.title}</b>
         <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
         {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}
+        {e.meta?.links?.length > 1 && <span className="lw-files">{e.meta.links.map(x => <a key={x.url} className="lw-file" href={x.url} target="_blank" rel="noopener noreferrer">{x.l} link</a>)}</span>}
         {e.meta?.files?.length > 0 && <span className="lw-files">{e.meta.files.map(f => <a key={f.url} className="lw-file" href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>)}</span>}
       </div>
       <span className="sub" style={{ whiteSpace: "nowrap" }}>{h1(e.hrs)} h</span>
@@ -196,6 +197,30 @@ const Area = ({ name, label, ...rest }) => (
   <div className="f"><label htmlFor={`i-${name}`}>{label}</label><textarea id={`i-${name}`} name={name} {...rest} /></div>
 );
 
+// GSC / GA4 / GTM setup: pick what was set up, with a link for each
+const TRACK = [["gsc", "Google Search Console", "https://search.google.com/search-console?resource_id=…"], ["ga4", "Google Analytics 4", "https://analytics.google.com/analytics/web/#/p…"], ["gtm", "Google Tag Manager", "https://tagmanager.google.com/#/container/…"]];
+function TrackingFields() {
+  const [on, setOn] = useState(["gsc"]);
+  const flip = (k) => setOn(L => (L.includes(k) ? L.filter(x => x !== k) : [...L, k]));
+  return (
+    <>
+      <div className="f"><label>What did you set up?</label>
+        <div className="lw-pick">
+          {TRACK.map(([k, l]) => (
+            <label key={k} className={`lw-chk${on.includes(k) ? " on" : ""}`}>
+              <input type="checkbox" name="tools" value={k} checked={on.includes(k)} onChange={() => flip(k)} />
+              <b>{k.toUpperCase()}</b><small>{l}</small>
+            </label>
+          ))}
+        </div></div>
+      {TRACK.filter(([k]) => on.includes(k)).map(([k, l, ph]) => (
+        <Inp key={k} name={`link_${k}`} label={`${l} link`} placeholder={ph} />
+      ))}
+      <Inp name="title" label="Details" required placeholder="GA4 property created, GTM installed on all pages, site verified in GSC" />
+    </>
+  );
+}
+
 function Fields({ type, devs }) {
   const mod = <Inp name="mod" label="Module or screen" placeholder="Eg. Checkout, Home page" />;
   switch (type) {
@@ -239,6 +264,7 @@ function Fields({ type, devs }) {
       <Inp name="title" label="What was set up" required placeholder="3 ad groups, 12 ads, call and sitelink extensions" />
       <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="kw" label="Main keywords or audience" /></div>
       <Inp name="url" label="Link (optional)" /></>);
+    case "tracking": return <TrackingFields />;
     case "kwresearch": return (<><Inp name="title" label="Research for" required placeholder="Dental implant pages / Diwali Google Ads campaign" />
       <div className="g2"><Inp name="kws" label="Keywords found" type="number" min="1" /><Inp name="kw" label="Main keyword" /></div>
       <Inp name="url" label="Keyword sheet link" placeholder="Google Sheet link" /></>);
@@ -290,6 +316,15 @@ export function LogWork() {
     if (type === "bug" && d.assign) meta.assignName = devs.find(x => x.id === d.assign)?.name || "";
     if (type === "screen" || type === "revision") meta.send = !!d.send;
     if (proof.length) meta.files = proof;
+    if (type === "tracking") {
+      const tools = new FormData(e.target).getAll("tools");
+      if (!tools.length) { toast("Tick at least one: GSC, GA4 or GTM"); return; }
+      meta.tools = tools.map(t => t.toUpperCase()).join(", ");
+      const links = tools.map(t => ({ l: t.toUpperCase(), url: String(d[`link_${t}`] || "").trim() })).filter(x => x.url).map(x => ({ ...x, url: /^https?:/.test(x.url) ? x.url : `https://${x.url}` }));
+      if (links.length) meta.links = links;
+      d.url = links[0]?.url || "";
+      d.title = `${meta.tools} setup: ${d.title}`;
+    }
     // work that needs proof: a link, or a screenshot or video
     if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) { toast("Add the link, or attach a screenshot or video"); return; }
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");

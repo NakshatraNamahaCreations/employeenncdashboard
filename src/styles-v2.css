@@ -613,3 +613,11 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
   .dc-msg { max-width: 100%; }
   .dc-tabs button { padding: 0 10px; font-size: 13px; }
 }
+
+/* GSC / GA4 / GTM: pick the tools */
+.lw-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.lw-chk { display: grid; gap: 2px; padding: 10px 12px 10px 36px; border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; position: relative; background: #fff; transition: border-color .12s, background .12s; }
+.lw-chk input { position: absolute; left: 12px; top: 13px; width: 16px; height: 16px; accent-color: var(--pri); margin: 0; }
+.lw-chk b { color: var(--navy); font-size: 14px; }
+.lw-chk small { color: var(--mut); font-size: 12px; }
+.lw-chk.on { border-color: var(--pri); background: #EEF3FF; }

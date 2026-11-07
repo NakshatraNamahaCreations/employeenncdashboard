@@ -41,7 +41,8 @@ export const TY = {
   // Google Ads
   campaign:    { g: "gads", l: "Campaign setup",       h: "New Search, PMax, Display or YouTube campaign", r: DM, c: true },
   optimise:    { g: "gads", l: "Campaign or ad changes", h: "Bids, budget, ads, targeting",             r: DM, c: true },
-  newad:       { g: "gads", l: "New ad or ad group",   h: "Ad copy, ad group or extensions",            r: DM, c: true },
+  tracking:    { g: "gads", l: "GSC / GA4 / GTM setup", h: "Search Console, Analytics or Tag Manager set up", r: DM, c: true },
+  newad:       { g: "gads", l: "New ad or campaign",   h: "Ad copy, ad group or extensions",            r: DM, c: true, hide: true },
   negative:    { g: "gads", l: "Negative keywords",    h: "Terms blocked to stop wasted spend",         r: DM, c: true },
   // Meta Ads and social media
   metaads:     { g: "meta", l: "Meta Ads",             h: "Facebook and Instagram campaign set up or changed", r: DM, c: true },
@@ -71,7 +72,7 @@ export const TY = {
 };
 
 // Work types for one role or for all of a person's roles
-export const typesFor = (role) => { const R = Array.isArray(role) ? role : [role]; return Object.entries(TY).filter(([, t]) => t.r.some(x => R.includes(x))); };
+export const typesFor = (role) => { const R = Array.isArray(role) ? role : [role]; return Object.entries(TY).filter(([, t]) => !t.hide && t.r.some(x => R.includes(x))); };
 
 // Every role a person has (main role first, then the extra roles the admin gave them)
 export const rolesOf = (u) => [...new Set([u?.role, ...(u?.roles || [])].filter(r => ROLES[r]))];
@@ -104,6 +105,7 @@ export function metaTxt(e) {
   if (m.amt) out.push(`₹${(+m.amt).toLocaleString("en-IN")}`); if (m.mod) out.push(m.mod); if (m.terms) out.push(m.terms);
   if (m.pages) out.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) out.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) out.push(`${m.kws} keywords`); if (m.month) out.push(m.month);
+  if (m.tools) out.push(m.tools);
   if (m.files?.length) out.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return out.join(" · ");
 }

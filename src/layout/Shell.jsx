@@ -30,8 +30,13 @@ function CheckInOut() {
   }, [attendance, L.length]);
   if (!attendance) return null;
   const go = async (action) => {
-    if (action === "out" && !days.some(d => d.date === today()) &&
-      !(await confirmBox({ title: "Check out without submitting?", text: "You have not submitted your day yet. You can submit it from Log work before you leave.", ok: "Check out" }))) return;
+    if (action === "out") {
+      const sub = days.some(d => d.date === today());
+      const ok = await confirmBox(sub
+        ? { title: "Are you sure you want to check out?", text: "The portal closes for today after you check out. Nothing more can be logged or sent until tomorrow morning.", ok: "Yes, check out" }
+        : { title: "Check out without submitting your day?", text: "You have not submitted your day yet. You can submit it from Log work before you leave. After you check out, the portal closes until tomorrow morning.", ok: "Yes, check out", danger: true });
+      if (!ok) return;
+    }
     setBusy(true); await mark(action); setBusy(false); setAsk(false);
   };
   const first = L[0]?.in, last = [...L].reverse().find(s => s.out)?.out;

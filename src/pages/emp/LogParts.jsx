@@ -8,6 +8,7 @@ import { h1, pct } from "../../util";
 const TARGET = 8, MIN = 7;
 
 const TIPS = {
+  tracking: ["Tick each tool you set up: GSC, GA4 or GTM.", "Add the link for each one so the admin can open it.", "A screenshot of the verified property or the published tag helps."],
   kwresearch: ["Say what the research was for: a page, a blog or an ad campaign.", "Attach the keyword sheet or add its link."],
   campaign: ["Pick the campaign type and the daily budget.", "Attach a screenshot of the campaign if there is no link."],
   optimise: ["Say what changed and why: bids, budget, ads or targeting.", "A before and after screenshot helps."],
