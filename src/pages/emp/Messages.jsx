@@ -8,6 +8,7 @@ import { fdw } from "../../util";
 import { useNewMessage } from "../../ding";
 import { useLive, every, useTyping, sayTyping, typingText } from "../../live";
 import { Tick } from "../../Tick";
+import { noEmoji } from "../../noEmoji";
 
 const mine = (m) => m.from !== "admin";
 
@@ -64,7 +65,7 @@ export default function Messages() {
     } catch (ex) { setList(L => (L || []).filter(m => m._id !== tmp._id)); setText(t); toast(ex.message); }
     finally { setBusy(false); }
   };
-  const L = list || [];
+  const L = (list || []).filter(m => noEmoji(m.text).trim());
 
   return (
     <>
@@ -81,7 +82,7 @@ export default function Messages() {
                 <div className="bub">
                   {m.from === "admin" && <b className="who">{m.by || "Admin"}</b>}
                   {m.refName && <span className="about">About {m.refName}</span>}
-                  <span className="txt"><Linkify text={m.text} /></span>
+                  <span className="txt"><Linkify text={noEmoji(m.text)} /></span>
                   <small>{tm(m.createdAt)}{m.from === "emp" && <Tick pending={m.pending} seen={m.readAdmin} title={m.readAdmin ? `Seen${m.seenAt ? ` ${tm(m.seenAt)}` : ""}` : "Sent"} />}</small>
                 </div>
               </div>
@@ -95,7 +96,7 @@ export default function Messages() {
               <option value="">General</option>{refs.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
             </select>
           )}
-          <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "pm" }); }} placeholder="Write a message…" aria-label="Message"
+          <textarea rows={1} value={text} onChange={e => { const v = noEmoji(e.target.value); setText(v); if (v) sayTyping({ chat: "pm" }); }} placeholder="Write a message…" aria-label="Message"
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
           <button className="btn p" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
         </form>

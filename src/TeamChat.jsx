@@ -9,6 +9,7 @@ import { toast } from "./toast";
 import { useRise, useNewMessage } from "./ding";
 import { useLive, every, useTyping, sayTyping, typingText } from "./live";
 import { Tick } from "./Tick";
+import { noEmoji } from "./noEmoji";
 
 const mine = (m) => m.mine;
 
@@ -81,6 +82,7 @@ export default function TeamChat() {
     finally { setBusy(false); }
   };
   const pick = (c) => { setMsgs([]); setCur(c); };
+  const shownMsgs = msgs.filter(m => noEmoji(m.text).trim());
   // Closing always goes back to the chat list, so the chat opens fresh next time.
   // A click anywhere outside the chat closes it; Esc goes back to the list, then closes.
   const root = useRef(null);
@@ -133,14 +135,14 @@ export default function TeamChat() {
           ) : (
             <>
               <div className="tc-body">
-                {!msgs.length ? <div className="tc-empty">No messages yet. Say hello.</div> : msgs.map((m, i) => {
+                {!shownMsgs.length ? <div className="tc-empty">No messages yet. Say hello.</div> : shownMsgs.map((m, i, msgs) => {
                   const first = i === 0 || msgs[i - 1].who !== m.who || new Date(m.createdAt) - new Date(msgs[i - 1].createdAt) > 600000;
                   return (
                     <div key={m._id} className={`tc-m ${m.mine ? "me" : ""} ${first ? "first" : ""}`}>
                       {!m.mine && <span className="tc-av" style={{ background: roleC(m.role), visibility: first ? "visible" : "hidden" }}>{initials(m.name)}</span>}
                       <div className="tc-bub">
                         {first && !m.mine && cur.kind === "group" && <b className="tc-who">{m.name} <span>{roleL(m.role)}</span></b>}
-                        <span className="tc-txt"><Linkify text={m.text} /></span>
+                        <span className="tc-txt"><Linkify text={noEmoji(m.text)} /></span>
                         <small>{tm(m.createdAt)}{m.mine && <Tick pending={m.pending} seen={m.seenBy > 0} title={m.seenBy > 0 ? (cur.kind === "group" ? `Seen by ${m.seenBy}` : "Seen") : "Sent"} />}{m.mine && cur.kind === "group" && m.seenBy > 0 && <span className="tick-n">{m.seenBy}</span>}</small>
                       </div>
                     </div>
@@ -150,7 +152,7 @@ export default function TeamChat() {
               </div>
               {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="tc-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "team", channel: cur.id }); }} placeholder={`Message ${cur.kind === "group" ? cur.name : cur.name.split(" ")[0]}…`}
+                <textarea rows={1} value={text} onChange={e => { const v = noEmoji(e.target.value); setText(v); if (v) sayTyping({ chat: "team", channel: cur.id }); }} placeholder={`Message ${cur.kind === "group" ? cur.name : cur.name.split(" ")[0]}…`}
                   aria-label="Message" onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="tc-send" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
               </form>
@@ -177,7 +179,7 @@ function ChanRow({ c, typing, onClick }) {
       {c.kind === "group" ? <span className="tc-av grp"><Hash size={15} /></span> : <span className="tc-av" style={{ background: roleC(c.role) }}>{initials(c.name)}</span>}
       <span className="tc-rx">
         <b>{c.name}</b>
-        {typing ? <span className="row-typing">{typing}</span> : <span>{c.last ? `${c.last.name}: ${c.last.text}` : c.kind === "dm" ? roleL(c.role) : "No messages yet"}</span>}
+        {typing ? <span className="row-typing">{typing}</span> : <span>{c.last ? `${c.last.name}: ${noEmoji(c.last.text)}` : c.kind === "dm" ? roleL(c.role) : "No messages yet"}</span>}
       </span>
       <span className="tc-rm">{c.last && <small>{tm(c.last.at)}</small>}{c.unread > 0 && <em>{c.unread}</em>}</span>
     </button>
