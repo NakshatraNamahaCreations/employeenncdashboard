@@ -13,6 +13,7 @@ const Calendar = lazy(() => import("./pages/emp/Calendar"));
 const Messages = lazy(() => import("./pages/emp/Messages"));
 const Documents = lazy(() => import("./pages/emp/Documents"));
 const MyClients = lazy(() => import("./pages/emp/MyClients"));
+const TeamPlans = lazy(() => import("./pages/emp/TeamPlans"));
 const Wait = ({ children }) => <Suspense fallback={<div className="empty">Loading…</div>}>{children}</Suspense>;
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="projects" element={<Wait><ProjectsPage /></Wait>} />
         <Route path="projects/:id" element={<Wait><ProjectDetail /></Wait>} />
         <Route path="history" element={<MyHistory />} />
+        <Route path="team-plans" element={<Wait><TeamPlans /></Wait>} />
         <Route path="profile" element={<Profile />} />
         <Route path=":rolePage" element={<Wait><RolePage /></Wait>} />
       </Route>

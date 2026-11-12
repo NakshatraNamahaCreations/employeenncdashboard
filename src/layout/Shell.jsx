@@ -127,6 +127,7 @@ export function EmpLayout() {
       { to: "/", end: true, label: "My day", ic: Sun, sub: "Today's work, tasks and timesheet" },
       { to: "/log", label: "Log work", ic: PlusCircle, sub: "Log each piece of work with its link and time" },
       { to: "/calendar", label: "Calendar", ic: CalendarDays, sub: "Meetings, deliveries, testing and tasks by date" },
+      ...(u.planLead ? [{ to: "/team-plans", label: "Team plans", ic: ClipboardList, sub: "Everyone's plans for today, and the report to the admin" }] : []),
     ]],
     ["My work", [
       ...(R.picks.has("clients") ? [{ to: "/clients", label: R.picks.has("projects") ? "SEO & ads projects" : "My projects", ic: Users2, sub: "Your projects, this month's targets and what is done so far" }] : []),
