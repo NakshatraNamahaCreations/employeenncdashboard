@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useProjects, isDone, byLive } from "./useProjects";
 import { Link, useParams } from "react-router-dom";
 import {
-  FolderKanban, FileText, Plug, Users, Bug, Clock, CalendarDays, ExternalLink, Eye, EyeOff, Copy, ArrowLeft, MapPin, ListChecks, Download, AlertTriangle,
+  FolderKanban, FileText, Plug, Users, Bug, Clock, CalendarDays, ExternalLink, Eye, EyeOff, Copy, ArrowLeft, MapPin, ListChecks, Download, AlertTriangle, Plus, Pencil, Trash2,
 } from "lucide-react";
 import { usePortal } from "../../auth/store";
 import { api, API } from "../../api";
 import { TY, metaTxt } from "../../roles";
 import { toast } from "../../toast";
+import Modal from "../../Modal";
 import { today, fd, fdw, h1, parse } from "../../util";
 
 // Projects the employee is assigned to in the CRM, with documents, integrations and team
@@ -88,11 +89,12 @@ export function ProjectDetail() {
   const { id } = useParams();
   const [st, setSt] = useState({ id: "", data: null, err: "" });
   const [tab, setTab] = useState("over");
+  const [n, setN] = useState(0);   // bumped to reload after a change
   useEffect(() => {
     let live = true;
     api(`/projects/${id}`).then(j => live && setSt({ id, data: j.data, err: "" }), e => live && setSt({ id, data: null, err: e.message }));
     return () => { live = false; };
-  }, [id]);
+  }, [id, n]);
   const p = st.id === id ? st.data : null;
   if (st.id === id && st.err) return <><Back /><div className="alert am">{st.err}</div></>;
   if (!p) return <><Back /><div className="card"><div className="empty">Loading…</div></div></>;
@@ -125,7 +127,7 @@ export function ProjectDetail() {
       </nav>
       {tab === "over" && <Overview p={p} go={setTab} />}
       {tab === "docs" && <Docs p={p} />}
-      {tab === "int" && <Integrations p={p} />}
+      {tab === "int" && <Integrations p={p} reload={() => setN(x => x + 1)} />}
       {tab === "work" && <WorkTab p={p} />}
       {tab === "cr" && <Extras p={p} />}
       {tab === "team" && <Team p={p} />}
@@ -225,17 +227,82 @@ function Secret({ p, i, s }) {
   );
 }
 
-function Integrations({ p }) {
-  if (!p.integrations.length) return <div className="card"><div className="empty">No third-party integrations added for this project in the CRM (Credential Vault).</div></div>;
+// Add or edit a login / key for this project. It is saved in the CRM's integrations, so the admin sees it there.
+function IntForm({ p, i, onClose, onSaved }) {
+  const cats = p.intCategories || ["Other"];
+  const [f, setF] = useState(() => ({
+    service: i?.service || "", category: i?.category || "Other", accountOwner: i?.owner || "client", mode: i?.mode || "live", status: i?.status || "live",
+    loginUrl: i?.loginUrl || "", username: i?.username || "", notes: i?.notes || "",
+  }));
+  const [secrets, setSecrets] = useState(() => (i ? i.secrets.map(s => ({ _id: s.id, label: s.label, value: "" })) : [{ label: "Password", value: "" }]));
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
+  const setS = (k, key, v) => setSecrets(L => L.map((s, x) => (x === k ? { ...s, [key]: v } : s)));
+  const canSecrets = p.showSecrets !== false || !i;
+  const save = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const body = { ...f, ...(canSecrets ? { secrets: secrets.filter(s => s.label.trim()) } : {}) };
+      await api(i ? `/projects/${p.id}/integrations/${i.id}` : `/projects/${p.id}/integrations`, { method: i ? "PUT" : "POST", body });
+      toast(i ? "Saved. The admin sees the change in the CRM" : "Added. The admin sees it in the CRM");
+      onSaved();
+    } catch (ex) { toast(ex.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={i ? `Edit ${i.service}` : "Add a login or key"} onClose={onClose}>
+      <form onSubmit={save}>
+        <div className="g2">
+          <div className="f"><label htmlFor="if-s">Service</label><input id="if-s" value={f.service} onChange={set("service")} placeholder="Razorpay, Hostinger, Firebase…" required /></div>
+          <div className="f"><label htmlFor="if-c">Type</label><select id="if-c" value={f.category} onChange={set("category")}>{cats.map(c => <option key={c}>{c}</option>)}</select></div>
+          <div className="f"><label htmlFor="if-o">Whose account</label><select id="if-o" value={f.accountOwner} onChange={set("accountOwner")}><option value="client">Client account</option><option value="nnc">NNC account</option></select></div>
+          <div className="f"><label htmlFor="if-m">Mode</label><select id="if-m" value={f.mode} onChange={set("mode")}><option value="live">Live</option><option value="test">Test</option></select></div>
+          <div className="f"><label htmlFor="if-st">Status</label><select id="if-st" value={f.status} onChange={set("status")}>{Object.entries(INT_ST).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          <div className="f"><label htmlFor="if-u">Login link</label><input id="if-u" value={f.loginUrl} onChange={set("loginUrl")} placeholder="dashboard.razorpay.com" /></div>
+        </div>
+        <div className="f"><label htmlFor="if-n">Username / login email</label><input id="if-n" value={f.username} onChange={set("username")} autoComplete="off" /></div>
+        {canSecrets ? (
+          <div className="f"><label>Passwords and keys <small className="sub" style={{ display: "inline" }}>saved encrypted</small></label>
+            {secrets.map((s, k) => (
+              <div key={k} className="pj-secrow">
+                <input value={s.label} onChange={e => setS(k, "label", e.target.value)} placeholder="Password, Key ID, Key secret…" aria-label="Name" />
+                <input type="password" value={s.value} onChange={e => setS(k, "value", e.target.value)} placeholder={s._id ? "Saved. Leave blank to keep" : "Value"} autoComplete="new-password" aria-label="Value" />
+                <button type="button" className="btn sm" onClick={() => setSecrets(L => L.filter((_, x) => x !== k))} aria-label="Remove"><Trash2 size={13} /></button>
+              </div>
+            ))}
+            <button type="button" className="btn sm" style={{ justifySelf: "start" }} onClick={() => setSecrets(L => [...L, { label: "", value: "" }])}><Plus size={13} /> Add another</button>
+          </div>
+        ) : <p className="sub">The admin has turned off passwords in the portal, so they can only be changed in the CRM.</p>}
+        <div className="f"><label htmlFor="if-x">Notes</label><textarea id="if-x" rows={3} value={f.notes} onChange={set("notes")} placeholder="Anything the team should know" /></div>
+        <div className="row"><button type="submit" className="btn p" disabled={busy}>{busy ? "Saving…" : i ? "Save" : "Add"}</button><button type="button" className="btn" onClick={onClose}>Cancel</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function Integrations({ p, reload }) {
+  const [form, setForm] = useState(null);   // {} to add, or the integration to edit
+  const head = (
+    <div className="pj-int-top">
+      <p className="sub" style={{ margin: 0 }}>{p.showSecrets ? "Passwords and keys are hidden. Each time you show one, it is recorded in the CRM with your name. " : ""}What you add here shows to the admin in the CRM.</p>
+      <button type="button" className="btn p sm" onClick={() => setForm({})}><Plus size={14} /> Add login or key</button>
+    </div>
+  );
+  const modal = form && <IntForm p={p} i={form.id ? form : null} onClose={() => setForm(null)} onSaved={() => { setForm(null); reload(); }} />;
+  if (!p.integrations.length) return <>{head}<div className="card"><div className="empty">No logins or keys for this project yet. Add one with the button above.</div></div>{modal}</>;
   return (
     <>
-      {p.showSecrets && <p className="sub" style={{ marginTop: 0 }}>Passwords and keys are hidden. Each time you show one, it is recorded in the CRM with your name.</p>}
+      {head}
+      {modal}
       <div className="pj-ints">{p.integrations.map(i => (
         <section key={i.id} className="card pj-int">
           <div className="pj-int-h">
             <span className="pj-ic"><Plug size={16} /></span>
             <div style={{ flex: 1, minWidth: 0 }}><b>{i.service}</b><span className="sub">{i.category} · {i.owner === "nnc" ? "NNC account" : "Client account"} · {i.mode === "test" ? "Test mode" : "Live mode"}</span></div>
             <span className={`pill ${INT_ST[i.status]?.[1] || "p-gr"}`}>{INT_ST[i.status]?.[0] || i.status}</span>
+            <button type="button" className="btn sm" onClick={() => setForm(i)} aria-label={`Edit ${i.service}`}><Pencil size={13} /></button>
           </div>
           <div className="pad pj-int-b">
             {i.loginUrl && <div className="pj-sec"><span className="sub">Login</span><a href={/^https?:/.test(i.loginUrl) ? i.loginUrl : `https://${i.loginUrl}`} target="_blank" rel="noopener noreferrer">{i.loginUrl.replace(/^https?:\/\//, "")} <ExternalLink size={12} /></a></div>}
@@ -244,6 +311,7 @@ function Integrations({ p }) {
             {i.secrets.map(s => <Secret key={s.id} p={p} i={i} s={s} />)}
             {i.renewal && <div className="pj-sec"><span className="sub">Renews</span><span>{fd(i.renewal)}</span></div>}
             {i.notes && <div className="pj-note">{i.notes}</div>}
+            {i.addedBy && <span className="sub">Added by {i.addedBy.replace(" (Employee Portal)", "")}{i.updatedBy && i.updatedBy !== i.addedBy ? ` · last changed by ${i.updatedBy.replace(" (Employee Portal)", "")}` : ""}</span>}
           </div>
         </section>
       ))}</div>

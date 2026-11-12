@@ -54,7 +54,22 @@ function Ranks() {
   const K = useGet(client ? `/keywords?client=${client}` : "");
   const [pos, setPos] = useState({});
   const [busy, setBusy] = useState(false);
+  const [kwTxt, setKwTxt] = useState("");
+  const [adding, setAdding] = useState(false);
   const rows = K.data || [];
+  // one keyword per line; "keyword, 14" also saves today's position as day 1
+  const addKws = async (e) => {
+    e.preventDefault();
+    const list = kwTxt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+      const m = /^(.*?)[,\t]\s*(\d{1,3})\s*$/.exec(l);
+      return m ? { keyword: m[1].trim(), pos: +m[2] } : { keyword: l };
+    }).filter(x => x.keyword);
+    if (!list.length) { toast("Write at least one keyword"); return; }
+    setAdding(true);
+    try { const j = await api("/keywords", { method: "POST", body: { client, rows: list } }); toast(`${j.added} keyword${j.added === 1 ? "" : "s"} added${j.skipped ? `, ${j.skipped} already there` : ""}`); setKwTxt(""); K.reload(); }
+    catch (ex) { toast(ex.message); }
+    finally { setAdding(false); }
+  };
   const save = async () => {
     const list = Object.entries(pos).filter(([, v]) => +v > 0).map(([keyword, v]) => ({ keyword, pos: +v }));
     if (!list.length) { toast("Enter at least one position"); return; }
@@ -74,7 +89,7 @@ function Ranks() {
             <tbody>
               {K.loading ? <tr><td colSpan={5}><div className="empty">Loading…</div></td></tr>
                 : K.err ? <tr><td colSpan={5}><div className="empty">{K.err}</div></td></tr>
-                  : !rows.length ? <tr><td colSpan={5}><div className="empty">No keywords agreed for this client yet. They are added in the CRM (SEO & Ads Team → Keywords).</div></td></tr>
+                  : !rows.length ? <tr><td colSpan={5}><div className="empty">No keywords for this client yet. Add them below.</div></td></tr>
                     : rows.map(k => {
                       const h = k.hist.filter(x => x.pos != null || true), first = h[0], last = h[h.length - 1];
                       const p = (x) => (x ? (x.pos == null ? "100+" : x.pos) : "-");
@@ -94,6 +109,16 @@ function Ranks() {
             <span className="sub" style={{ flex: 1 }}>Check positions in Google Search Console or your rank tracker. Not in the top 100? Enter 101.</span>
             <button type="button" className="btn p" disabled={busy || !rows.length} onClick={save}>{busy ? "Saving…" : "Save positions"}</button>
           </div>
+        </section>
+      )}
+      {C.length > 0 && (
+        <section className="card"><h3>Add keywords <small>for {C.find(c => c.id === client)?.name}</small></h3>
+          <form className="pad" onSubmit={addKws}>
+            <div className="f"><label htmlFor="kw-add">One keyword per line. Add a comma and the position to save today's position as day 1.</label>
+              <textarea id="kw-add" rows={5} value={kwTxt} onChange={e => setKwTxt(e.target.value)} placeholder={"car ceramic coating hsr layout\ncar detailing bangalore, 14\nbest car wash near me, 101"} /></div>
+            <div className="row"><button type="submit" className="btn p" disabled={adding || !kwTxt.trim()}>{adding ? "Adding…" : "Add keywords"}</button>
+              <span className="sub">The admin sees them in the CRM under SEO & Ads Team → Keyword positions.</span></div>
+          </form>
         </section>
       )}
     </>
@@ -121,7 +146,9 @@ function AdsReport() {
   const client = cid || C[0]?.id || "";
   const cl = C.find(c => c.id === client);
   const H = useGet(client ? `/ads?client=${client}` : "");
-  const [f, setF] = useState({ contact: "", spend: "", clicks: "", impr: "", conv: "" });
+  const [f, setF] = useState({ contact: "", campaign: "", spend: "", clicks: "", impr: "", ctr: "", cpc: "", conv: "" });
+  const [plat, setPlat] = useState("google");   // google | meta
+  const [day, setDay] = useState(today());       // the day the numbers are for (yesterday's report can be sent today)
   const [terms, setTerms] = useState("");
   const [msg, setMsg] = useState("");
   const [saved, setSaved] = useState(null);
@@ -132,25 +159,40 @@ function AdsReport() {
   const w = wasted(L, sp);
   const onFile = (file) => { if (!file) return; const r = new FileReader(); r.onload = () => { setTerms(String(r.result)); toast("Search terms loaded"); }; r.readAsText(file); };
   const pickClient = (v) => { setCid(v); setMsg(""); setSaved(null); };
+  const PL = plat === "meta" ? "Meta Ads" : "Google Ads";
+  // CTR and CPC: what was typed, else worked out from the numbers
+  const autoCtr = +f.impr ? ((+f.clicks / +f.impr) * 100).toFixed(2) : "";
+  const autoCpc = +f.clicks ? (+f.spend / +f.clicks).toFixed(2) : "";
 
   const write = async (e) => {
     e.preventDefault();
-    const clicks = +f.clicks, impr = +f.impr, conv = +f.conv, spend = +f.spend;
-    const top = [...L].sort((a, b) => b.clicks - a.clicks).slice(0, 5);
+    const has = (v) => String(v).trim() !== "";
+    const clicks = +f.clicks || 0, impr = +f.impr || 0, conv = +f.conv || 0, spend = +f.spend || 0;
+    const ctr = has(f.ctr) ? +f.ctr : autoCtr, cpc = has(f.cpc) ? +f.cpc : autoCpc;
+    const google = plat === "google";
+    const top = google ? [...L].sort((a, b) => b.clicks - a.clicks).slice(0, 5) : [];
     const contact = f.contact || cl?.contact || "";
+    const isToday = day === today();
     setBusy(true);
     try {
-      const j = await api("/ads", { method: "POST", body: { client, date: today(), spend, clicks, impr, conv, terms: L, negs: w.map(t => t.t) } });
-      setSaved(j.data);
-      setMsg(`${greet()}${contact ? ` ${contact}` : ""}, here is today's Google Ads update for ${cl?.name} (${fdw(today())}):
+      const j = await api("/ads", { method: "POST", body: { client, date: day, platform: plat, campaign: f.campaign, spend: f.spend, clicks: f.clicks, impr: f.impr, ctr: f.ctr, cpc: f.cpc, conv: f.conv, ...(google ? { terms: L, negs: w.map(t => t.t) } : {}) } });
+      setSaved({ ...j.data, plat });
+      // only the numbers that were filled in go in the message
+      const lines = [
+        has(f.campaign) && `• Campaign: ${f.campaign.trim()}`,
+        has(f.spend) && `• Amount spent: ${rs(spend)}`,
+        has(f.impr) && `• Impressions: ${impr.toLocaleString("en-IN")}`,
+        has(f.clicks) && `• Clicks: ${clicks.toLocaleString("en-IN")}`,
+        ctr !== "" && `• CTR: ${ctr}%`,
+        cpc !== "" && `• Cost per click: ${rs(cpc)}`,
+        has(f.conv) && `• Conversions: ${conv}${conv && spend ? ` | Cost per conversion: ${rs(spend / conv)}` : ""}`,
+      ].filter(Boolean);
+      setMsg(`${greet()}${contact ? ` ${contact}` : ""}, here is ${isToday ? "today's" : `the ${fdw(day)}`} ${PL} update for ${cl?.name}${isToday ? ` (${fdw(day)})` : ""}:
 
-• Amount spent: ${rs(spend)}
-• Clicks: ${clicks.toLocaleString("en-IN")} | Impressions: ${impr.toLocaleString("en-IN")} | CTR: ${impr ? ((clicks / impr) * 100).toFixed(1) : 0}%
-• Leads: ${conv}${conv ? ` | Cost per lead: ${rs(spend / conv)}` : ""}
-• Average cost per click: ${rs(clicks ? spend / clicks : 0)}
-${top.length ? `\nTop search terms today:\n${top.map((t, i) => `${i + 1}. ${t.t}: ${t.clicks} clicks${t.conv ? `, ${t.conv} lead${t.conv > 1 ? "s" : ""}` : ""}`).join("\n")}\n` : ""}${w.length ? `\nTerms we have blocked to save budget: ${w.map(t => t.t).join(", ")}\n` : ""}
+${lines.join("\n") || "• No numbers for this day."}
+${top.length ? `\nTop search terms:\n${top.map((t, i) => `${i + 1}. ${t.t}: ${t.clicks} clicks${t.conv ? `, ${t.conv} lead${t.conv > 1 ? "s" : ""}` : ""}`).join("\n")}\n` : ""}${google && w.length ? `\nTerms we have blocked to save budget: ${w.map(t => t.t).join(", ")}\n` : ""}
 Regards,
-${P.session.user.name}, Google Ads team
+${P.session.user.name}, ${PL} team
 Nakshatra Namaha Creations`);
       toast("Saved to the CRM. Check the message and send it.");
       H.reload(); P.refresh();
@@ -158,8 +200,8 @@ Nakshatra Namaha Creations`);
     finally { setBusy(false); }
   };
   const sent = async () => {
-    if (!saved?._id || saved.sent) return;
-    try { await api(`/ads/${saved._id}/sent`, { method: "PUT" }); setSaved(s => ({ ...s, sent: true })); H.reload(); } catch { /* the message still opens */ }
+    if (!saved?._id || (saved.plat === "meta" ? saved.metaSent : saved.sent)) return;
+    try { await api(`/ads/${saved._id}/sent${saved.plat === "meta" ? "?platform=meta" : ""}`, { method: "PUT" }); setSaved(s => ({ ...s, sent: true })); H.reload(); } catch { /* the message still opens */ }
   };
   const phone = String(cl?.phone || "").replace(/\D/g, "");
 
@@ -167,25 +209,36 @@ Nakshatra Namaha Creations`);
   return (
     <>
       <h2 className="t">Daily ads report<span>.</span></h2>
-      <p className="lead">Enter today's numbers and upload the search terms. The client message is written for you.</p>
+      <p className="lead">Pick the day and Google Ads or Meta Ads, fill in the numbers you have (none are required) and save. The client message is written for you.</p>
       <div className="grid2">
         <div>
-          <section className="card"><h3>{fdw(today())}</h3>
+          <section className="card"><h3>{PL} report <small>{day === today() ? "today" : fdw(day)}</small></h3>
             <form className="pad" onSubmit={write}>
-              <div className="g2">
-                <ClientPick clients={C} value={client} onChange={pickClient} />
+              <div className="g3">
+                <div className="f"><label htmlFor="ap">Platform</label>
+                  <select id="ap" value={plat} onChange={e => { setPlat(e.target.value); setMsg(""); setSaved(null); }}><option value="google">Google Ads</option><option value="meta">Meta Ads</option></select></div>
+                <div className="f"><label htmlFor="ad">Report for the day</label>
+                  <input id="ad" type="date" value={day} max={today()} onChange={e => { if (e.target.value) { setDay(e.target.value); setMsg(""); setSaved(null); } }} /></div>
                 <div className="f"><label htmlFor="acn">Contact name (for the message)</label><input id="acn" type="text" value={f.contact} onChange={set("contact")} placeholder={cl?.contact || "Eg. Supreeth sir"} /></div>
               </div>
-              <div className="g4">
-                <div className="f"><label htmlFor="as">Amount spent (₹)</label><input id="as" type="number" min="0" required value={f.spend} onChange={set("spend")} /></div>
-                <div className="f"><label htmlFor="acl">Clicks</label><input id="acl" type="number" min="0" required value={f.clicks} onChange={set("clicks")} /></div>
-                <div className="f"><label htmlFor="ai">Impressions</label><input id="ai" type="number" min="0" required value={f.impr} onChange={set("impr")} /></div>
-                <div className="f"><label htmlFor="av">Leads</label><input id="av" type="number" min="0" required value={f.conv} onChange={set("conv")} /></div>
+              <div className="g2">
+                <ClientPick clients={C} value={client} onChange={pickClient} />
+                <div className="f"><label htmlFor="acp">Campaign name</label><input id="acp" type="text" value={f.campaign} onChange={set("campaign")} placeholder="Eg. Ceramic coating - Search" /></div>
               </div>
-              <div className="f"><label htmlFor="tf">Search terms report: upload the CSV from Google Ads</label><input id="tf" type="file" accept=".csv,.txt,.tsv" onChange={e => onFile(e.target.files[0])} /></div>
-              <div className="f"><label htmlFor="tt">or paste it here (search term, clicks, cost, leads)</label>
-                <textarea id="tt" rows={6} value={terms} onChange={e => setTerms(e.target.value)} placeholder={"Search term, Clicks, Cost, Conversions\ncar ceramic coating, 22, 410, 2"} /></div>
-              {L.length > 0 && (
+              <div className="g3">
+                <div className="f"><label htmlFor="ai">Impressions</label><input id="ai" type="number" min="0" value={f.impr} onChange={set("impr")} /></div>
+                <div className="f"><label htmlFor="acl">Clicks</label><input id="acl" type="number" min="0" value={f.clicks} onChange={set("clicks")} /></div>
+                <div className="f"><label htmlFor="actr">CTR (%)</label><input id="actr" type="number" min="0" step="0.01" value={f.ctr} onChange={set("ctr")} placeholder={autoCtr ? `${autoCtr} (auto)` : ""} /></div>
+                <div className="f"><label htmlFor="as">Cost (₹)</label><input id="as" type="number" min="0" step="0.01" value={f.spend} onChange={set("spend")} /></div>
+                <div className="f"><label htmlFor="acpc">CPC (₹)</label><input id="acpc" type="number" min="0" step="0.01" value={f.cpc} onChange={set("cpc")} placeholder={autoCpc ? `${autoCpc} (auto)` : ""} /></div>
+                <div className="f"><label htmlFor="av">Conversions</label><input id="av" type="number" min="0" value={f.conv} onChange={set("conv")} /></div>
+              </div>
+              {plat === "google" && <>
+              <div className="f"><label htmlFor="tf">Search terms report (optional): upload the CSV from Google Ads</label><input id="tf" type="file" accept=".csv,.txt,.tsv" onChange={e => onFile(e.target.files[0])} /></div>
+              <div className="f"><label htmlFor="tt">or paste it here (search term, clicks, cost, conversions)</label>
+                <textarea id="tt" rows={5} value={terms} onChange={e => setTerms(e.target.value)} placeholder={"Search term, Clicks, Cost, Conversions\ncar ceramic coating, 22, 410, 2"} /></div>
+              </>}
+              {plat === "google" && L.length > 0 && (
                 <div className="alert bl" style={{ display: "block" }}>
                   <b>{L.length} search terms read.</b> {L.reduce((a, t) => a + t.clicks, 0)} clicks, {rs(L.reduce((a, t) => a + t.cost, 0))} cost, {L.reduce((a, t) => a + t.conv, 0)} leads.
                   {w.length > 0 && <><br /><span style={{ color: "var(--red)" }}>No leads but spending money: {w.map(t => t.t).join(", ")}. Consider adding them as negative keywords.</span></>}
@@ -197,8 +250,9 @@ Nakshatra Namaha Creations`);
           <section className="card"><h3>Recent reports <small>{cl?.name}</small></h3>
             {H.loading ? <div className="empty">Loading…</div> : (H.data || []).length ? H.data.map(r => (
               <div key={r._id} className="li"><div className="x"><b>{fdw(r.date)}</b>
-                <span className="sub">{rs(r.spend)} spent · {r.clicks} clicks · {r.conv} leads</span></div>
-                {r.sent ? <span className="pill p-ok">Sent</span> : <span className="pill p-amb">Not sent</span>}</div>
+                {(r.spend || r.clicks || r.impr || r.terms?.length > 0 || !r.meta) && <span className="sub">Google Ads{r.campaign ? ` · ${r.campaign}` : ""} · {rs(r.spend)} · {r.clicks} clicks · {r.conv} conversions {r.sent ? "· sent" : "· not sent"}</span>}
+                {r.meta && <span className="sub">Meta Ads{r.meta.campaign ? ` · ${r.meta.campaign}` : ""} · {rs(r.meta.spend)} · {r.meta.clicks} clicks · {r.meta.conv} conversions {r.metaSent ? "· sent" : "· not sent"}</span>}</div>
+                {(r.sent || !(r.spend || r.clicks || r.impr)) && (!r.meta || r.metaSent) ? <span className="pill p-ok">Sent</span> : <span className="pill p-amb">Not sent</span>}</div>
             )) : <div className="empty">No reports for this client yet.</div>}
           </section>
         </div>
@@ -209,11 +263,11 @@ Nakshatra Namaha Creations`);
                 <textarea className="msg" value={msg} onChange={e => setMsg(e.target.value)} aria-label="Client message" />
                 <div className="row" style={{ marginTop: 12 }}>
                   <a className="btn g" href={`https://wa.me/${phone.length >= 10 ? (phone.length === 10 ? `91${phone}` : phone) : ""}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" onClick={sent}>Send on WhatsApp</a>
-                  <a className="btn" href={`mailto:?subject=${encodeURIComponent(`Google Ads update: ${cl?.name}`)}&body=${encodeURIComponent(msg)}`} onClick={sent}>Email</a>
+                  <a className="btn" href={`mailto:?subject=${encodeURIComponent(`${PL} update: ${cl?.name}`)}&body=${encodeURIComponent(msg)}`} onClick={sent}>Email</a>
                   <button type="button" className="btn" onClick={() => { navigator.clipboard?.writeText(msg).then(() => toast("Copied"), () => toast("Select the text and copy it")); }}>Copy</button>
                 </div>
               </>
-            ) : <div className="empty">Fill in today's numbers and save. The message appears here.</div>}
+            ) : <div className="empty">Fill in the numbers you have and save. The message appears here.</div>}
           </div>
         </section>
       </div>

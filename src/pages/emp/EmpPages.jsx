@@ -13,7 +13,7 @@ import TodayPlan from "./TodayPlan";
 import { ArrowLeft } from "lucide-react";
 import { DayPanel, TypeTiles, TodaySheet, Tips } from "./LogParts";
 import { TY_IC } from "./workIcons";
-import { today, T, fd, fdw, h1, pct, weekStart, monthStart, greet, parse, iso, DOW } from "../../util";
+import { today, T, fd, fdw, h1, pct, weekStart, monthStart, greet, parse, iso, DOW, ampm } from "../../util";
 
 /* ───────── shared bits ───────── */
 
@@ -106,7 +106,7 @@ function StdDay() {
     <>
       <h2 className="t">{greet()}, {u.name.split(" ")[0]}<span>.</span></h2>
       <p className="lead">{fdw(today())} · {R.l}{P.loading ? " · loading…" : ""}</p>
-      {rec && <div className="alert ok"><b>Day submitted at {rec.at}.</b> {h1(h)} hours and {L.length} items sent to Harish. Today's entries are now locked.</div>}
+      {rec && <div className="alert ok"><b>Day submitted at {ampm(rec.at)}.</b> {h1(h)} hours and {L.length} items sent to Harish. Today's entries are now locked.</div>}
       {bl.map(b => (
         <div key={b._id} className="alert am"><b>You flagged a blocker:</b> {b.text}{b.refName ? ` (${b.refName})` : ""}
           <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={() => P.resolveBlocker(b._id)}>It's sorted now</button></div>
@@ -499,7 +499,7 @@ export function MyHistory() {
             <div key={d}>
               <div className="li" style={{ background: "#FAFBFD", fontSize: 12, fontWeight: 600, color: "var(--mut)" }}>
                 <span className="x">{fdw(d)}</span><span>{h1(D.reduce((s, e) => s + (e.hrs || 0), 0))} h</span>
-                {r ? <span className="pill p-ok">Submitted {r.at}</span> : d === today() ? <span className="pill p-amb">Open</span> : <span className="pill p-red">Not submitted</span>}
+                {r ? <span className="pill p-ok">Submitted {ampm(r.at)}</span> : d === today() ? <span className="pill p-amb">Open</span> : <span className="pill p-red">Not submitted</span>}
               </div>
               {D.map(e => <EntryLi key={e._id} e={e} />)}
               {r && (r.note || r.plan) && <div className="li"><div className="x sub">{r.note ? `Note: ${r.note}` : ""}{r.plan ? ` · Tomorrow: ${r.plan}` : ""}</div></div>}

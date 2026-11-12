@@ -71,7 +71,7 @@ export default function DevDay() {
     <>
       <h2 className="t">{greet()}, {u.name.split(" ")[0]}<span>.</span></h2>
       <p className="lead">{fdw(today())} · {R.l}{P.loading ? " · loading…" : ""}</p>
-      {rec && <div className="alert ok"><b>Day submitted at {rec.at}.</b> {h1(h)} hours and {todayL.length} items sent to Harish. Today's entries are now locked.</div>}
+      {rec && <div className="alert ok"><b>Day submitted at {ampm(rec.at)}.</b> {h1(h)} hours and {todayL.length} items sent to Harish. Today's entries are now locked.</div>}
       {bl.map(b => (
         <div key={b._id} className="alert am"><b>You flagged a blocker:</b> {b.text}{b.refName ? ` (${b.refName})` : ""}
           <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={() => P.resolveBlocker(b._id)}>It's sorted now</button></div>
@@ -84,7 +84,7 @@ export default function DevDay() {
         <div className="kpi"><span className="l">Open bugs on me</span><span className="v" style={{ color: openBugs.length ? "var(--red)" : undefined }}>{openBugs.length}</span><span className="s">{openBugs.filter(b => b.meta?.sev === "High").length} high priority</span></div>
         <div className="kpi"><span className="l">Active projects</span><span className="v">{live.length}</span><span className="s">{projects.length} assigned in the CRM</span></div>
         <div className="kpi"><span className="l">Last submission</span><span className="v" style={{ fontSize: 18 }}>{last ? (last.date === today() ? "Today" : fd(last.date)) : "-"}</span>
-          <span className="s">{last ? `at ${last.at}` : "no day submitted yet"}</span></div>
+          <span className="s">{last ? `at ${ampm(last.at)}` : "no day submitted yet"}</span></div>
       </div>
 
       <div className="row" style={{ marginBottom: 16 }}>
@@ -134,7 +134,7 @@ export default function DevDay() {
           <section className="card"><h3>Last submission</h3>
             {last ? (
               <div className="pad">
-                <b style={{ color: "var(--navy)" }}>{fdw(last.date)} at {last.at}</b>
+                <b style={{ color: "var(--navy)" }}>{fdw(last.date)} at {ampm(last.at)}</b>
                 <span className="sub">{h1(hrsOf(P.entries.filter(e => e.date === last.date)))} hours · {P.entries.filter(e => e.date === last.date).length} items</span>
                 {last.note && <p className="sub" style={{ marginBottom: 0 }}>Note: {last.note}</p>}
                 {last.plan && <p className="sub" style={{ marginBottom: 0 }}>Plan: {last.plan}</p>}
@@ -173,7 +173,7 @@ export default function DevDay() {
           </div>
           <div className="dv-legend"><span><i className="ok" /> Submitted</span><span><i className="miss" /> Not submitted</span><span><i className="open" /> Today</span></div>
           <div className="dv-pick">
-            <h4>{fdw(pick)} {pickRec ? <span className="pill p-ok">Submitted {pickRec.at}</span> : pick < today() && parse(pick).getDay() !== 0 ? <span className="pill p-red">Not submitted</span> : null}</h4>
+            <h4>{fdw(pick)} {pickRec ? <span className="pill p-ok">Submitted {ampm(pickRec.at)}</span> : pick < today() && parse(pick).getDay() !== 0 ? <span className="pill p-red">Not submitted</span> : null}</h4>
             {pickEv.map(m => <MeetLi key={`${m.src}${m.id}`} m={m} />)}
             {pickL.map(e => <EntryLi key={e._id} e={e} />)}
             {!pickEv.length && !pickL.length && <div className="empty" style={{ padding: 18 }}>Nothing on this day.</div>}

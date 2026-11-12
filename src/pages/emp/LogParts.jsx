@@ -2,7 +2,7 @@ import { MoreHorizontal, CheckCircle2, Circle, Clock, Trash2, ExternalLink, Lock
 import { TY, GROUPS, metaTxt } from "../../roles";
 import { fileUrl } from "../../api";
 import { TY_IC } from "./workIcons";
-import { h1, pct } from "../../util";
+import { h1, pct, ampm } from "../../util";
 
 // Pieces of the Log work page: how a day is completed, work types, today's timesheet, tips
 const TARGET = 8, MIN = 7;
@@ -34,7 +34,7 @@ export function DayPanel({ hrs, items, submitted, onSubmit, onLog, extra = 0 }) 
   const steps = [
     { done: items > 0, t: "Log each piece of work", s: items ? `${items} item${items > 1 ? "s" : ""} logged` : "As you finish it, with its link" },
     { done: hrs >= MIN, t: `Reach ${MIN} to ${TARGET} hours`, s: `${h1(hrs)} of ${TARGET} hours` },
-    { done: submitted, t: "Submit your day", s: submitted ? `Sent at ${submitted.at}` : "Before you leave. It locks the day" },
+    { done: submitted, t: "Submit your day", s: submitted ? `Sent at ${ampm(submitted.at)}` : "Before you leave. It locks the day" },
   ];
   const left = Math.max(0, TARGET - hrs);
   return (

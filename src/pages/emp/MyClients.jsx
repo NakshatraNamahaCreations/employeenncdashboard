@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Phone, Mail, Globe, CalendarDays, LineChart, PenTool, Search, PlusCircle } from "lucide-react";
+import { Phone, Mail, Globe, CalendarDays, PlusCircle } from "lucide-react";
+import { initials } from "../../roles";
 import { api } from "../../api";
 import { toast } from "../../toast";
 import { fd } from "../../util";
@@ -12,13 +13,15 @@ const JOB = { seo: ["SEO", "p-blue"], ads: ["Google Ads", "p-amb"], design: ["De
 const inr = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
 
-function Bar({ label, done, target, note }) {
+// One target as a small tile: done of target with a thin bar
+function Tile({ label, done, target, note, fmt = (n) => n }) {
   const ok = target > 0 && done >= target;
   return (
-    <div className="mc-bar">
-      <div className="mc-bl"><span>{label}</span><b className={ok ? "ok" : ""}>{done} of {target}</b></div>
+    <div className={`mc-tile ${ok ? "ok" : ""}`}>
+      <span className="mc-tl">{label}</span>
+      <b>{fmt(done)}<small> / {fmt(target)}</small></b>
       <div className="mc-track"><i className={ok ? "ok" : ""} style={{ width: `${pct(done, target)}%` }} /></div>
-      {note && <span className="sub">{note}</span>}
+      {note && <span className="mc-tn">{note}</span>}
     </div>
   );
 }
@@ -42,56 +45,45 @@ export default function MyClients() {
           return (
             <section key={c.id} className="card mc">
               <div className="mc-h">
-                <div style={{ minWidth: 0 }}><b>{c.name}</b>
+                <div style={{ minWidth: 0 }}><b title={c.name}>{c.name}</b>
                   <span className="sub">{c.start ? `Since ${fd(c.start)}` : ""}</span></div>
                 <span className="mc-jobs">{c.myJobs.map(j => <span key={j} className={`pill ${JOB[j][1]}`}>{JOB[j][0]}</span>)}</span>
               </div>
               <div className="mc-info">
-                {c.contact && <span><b>{c.contact}</b></span>}
+                {c.contact && <span className="mc-contact">{c.contact}</span>}
                 {c.phone && <a href={`tel:${c.phone}`}><Phone size={13} /> {c.phone}</a>}
-                {c.email && <a href={`mailto:${c.email}`}><Mail size={13} /> {c.email}</a>}
-                {c.site && <a href={/^https?:/.test(c.site) ? c.site : `https://${c.site}`} target="_blank" rel="noopener noreferrer"><Globe size={13} /> {c.site}</a>}
+                {c.email && <a href={`mailto:${c.email}`} title={c.email}><Mail size={13} /> <span>{c.email}</span></a>}
+                {c.site && <a href={/^https?:/.test(c.site) ? c.site : `https://${c.site}`} target="_blank" rel="noopener noreferrer" title={c.site}><Globe size={13} /> <span>{c.site.replace(/^https?:\/\//, "")}</span></a>}
               </div>
 
-              <div className="mc-people"><small>Team on this project</small>
-                {c.people?.length ? c.people.map(p => <span key={p.name} className="mc-person"><b>{p.name}</b><em>{p.roles.map(r => ({ seo: "SEO", ads: "Ads", design: "Design" }[r] || r)).join(", ")}</em></span>) : <em>Only you</em>}
-              </div>
-
-              {seo && (
-                <div className="mc-sec"><h4><Search size={14} /> SEO this month</h4>
-                  <Bar label="Backlinks this month" done={d.backlinkMonth} target={t.backlink} note={d.backlinkToday ? `${d.backlinkToday} added today` : ""} />
-                  <Bar label="GMB posts this month" done={d.gmbMonth} target={t.gmb} />
-                  <Bar label="Blogs this month" done={d.blogMonth} target={t.blog} />
-                  <div className="mc-kw"><span>{c.keywords.count} agreed keyword{c.keywords.count === 1 ? "" : "s"}</span><span className="sub">{c.keywords.lastCheck ? `Last rank check ${fd(c.keywords.lastCheck)}` : "Ranks not checked yet"}</span></div>
+              {(seo || des || (ads && c.ads)) && (
+                <div className="mc-tiles">
+                  {seo && <Tile label="Backlinks" done={d.backlinkMonth} target={t.backlink} note={d.backlinkToday ? `${d.backlinkToday} today` : ""} />}
+                  {seo && <Tile label="GMB posts" done={d.gmbMonth} target={t.gmb} />}
+                  {seo && <Tile label="Blogs" done={d.blogMonth} target={t.blog} />}
+                  {des && <Tile label="Posters" done={d.posterMonth} target={t.poster} />}
+                  {ads && c.ads && <Tile label="Ads spend" done={Math.round(c.ads.spendMonth || 0)} target={c.budget || 0} fmt={inr} note={`${c.ads.leadsMonth} leads`} />}
                 </div>
               )}
-              {ads && c.ads && (
-                <div className="mc-sec"><h4><LineChart size={14} /> Google Ads</h4>
-                  <div className="mc-row">
-                    <span>Today's report</span>
+              <div className="mc-lines">
+                {seo && <div className="mc-row"><span>Keywords</span><span className="sub">{c.keywords.count} agreed · {c.keywords.lastCheck ? `checked ${fd(c.keywords.lastCheck)}` : "not checked yet"}</span></div>}
+                {ads && c.ads && (
+                  <div className="mc-row"><span>Today's ads report</span>
                     {c.ads.today?.sent ? <span className="pill p-ok">Sent</span> : c.ads.today ? <span className="pill p-blue">Saved, not sent</span> : <span className={`pill ${hr >= 18 ? "p-red" : "p-amb"}`}>{hr >= 18 ? "Late, send by 7 pm" : "Not done yet"}</span>}
                   </div>
-                  <Bar label="Spend this month" done={Math.round(c.ads.spendMonth)} target={c.budget} note={`${inr(c.ads.spendMonth)} of ${inr(c.budget)} budget · ${c.ads.leadsMonth} leads · ${c.ads.days} reports`} />
+                )}
+                {ads && c.metaBudget > 0 && <div className="mc-row"><span>Meta Ads budget</span><b>{inr(c.metaBudget)}</b></div>}
+                <div className="mc-row"><span>Team</span>
+                  <span className="mc-avs">{c.people?.length ? c.people.map(p => <span key={p.name} className="mc-av" title={`${p.name} · ${p.roles.map(r => ({ seo: "SEO", ads: "Ads", design: "Design" }[r] || r)).join(", ")}`}>{initials(p.name)}</span>) : <span className="sub">Only you</span>}</span>
                 </div>
-              )}
-              {ads && c.metaBudget > 0 && (
-                <div className="mc-sec"><h4><LineChart size={14} /> Meta Ads</h4>
-                  <div className="mc-row"><span>Budget this month</span><b>{inr(c.metaBudget)}</b></div>
-                  <span className="sub">Facebook and Instagram ads for this client</span>
-                </div>
-              )}
-              {des && (
-                <div className="mc-sec"><h4><PenTool size={14} /> Design</h4>
-                  <Bar label="Posters this month" done={d.posterMonth} target={t.poster} />
-                </div>
-              )}
+              </div>
 
               <div className="mc-act">
                 <Link className="btn sm p" to="/log"><PlusCircle size={14} /> Log work</Link>
-                {ads && <Link className="btn sm" to="/ads">Daily ads report</Link>}
+                {ads && <Link className="btn sm" to="/ads">Ads report</Link>}
                 {seo && <Link className="btn sm" to="/ranks">Rank check</Link>}
                 {des && <Link className="btn sm" to="/designs">My designs</Link>}
-                <Link className="btn sm" to="/meetings"><CalendarDays size={14} /> Meeting</Link>
+                <Link className="btn sm" to="/meetings" aria-label="Meeting" title="Meeting"><CalendarDays size={14} /></Link>
               </div>
             </section>
           );
