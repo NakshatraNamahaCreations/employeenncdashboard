@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, CalendarDays, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, ExternalLink, Plus } from "lucide-react";
 import { usePortal } from "../../auth/store";
 import { api } from "../../api";
 import { today, fdw, h1, parse, iso, ampm } from "../../util";
@@ -105,6 +105,7 @@ export default function Calendar() {
             <section className="card"><h3><CalendarDays size={16} /> {fdw(pick)}{pick === today() ? <span className="pill p-blue">Today</span> : null}</h3>
               {(byDay[pick] || []).length ? byDay[pick].map(e => <EvRow key={e.id} e={e} />) : <div className="empty">Nothing on this day.</div>}
               {hrs(pick) > 0 && <div className="li"><div className="x sub">{h1(hrs(pick))} hours logged by you</div><Link className="btn sm" to="/history">History</Link></div>}
+              <div className="cal-add"><Link className="btn p sm" to={`/meetings?new=${pick}`}><Plus size={14} /> {pick >= today() ? "Schedule a meeting on this day" : "Add a meeting on this day"}</Link></div>
             </section>
           )}
           <section className="card"><h3>Coming up</h3>
@@ -127,7 +128,7 @@ function EvRow({ e, withDate }) {
         <span className="sub">{[withDate && fdw(e.date), e.time && ampm(e.time), e.refName, e.text, e.by && `by ${e.by}`, e.kind === "meeting" && (e.sent ? `MOM sent ${e.sent}×` : e.mom ? "MOM not sent" : "no MOM yet")].filter(Boolean).join(" · ")}</span>
       </div>
       {e.link && <a className="btn sm" href={e.link} target="_blank" rel="noopener noreferrer">Join <ExternalLink size={12} /></a>}
-      {e.kind === "meeting" && <Link className="btn sm" to="/meetings">Open</Link>}
+      {e.kind === "meeting" && <Link className="btn sm" to={e.mid ? `/meetings?open=${e.mid}` : "/meetings"}>Open</Link>}
     </div>
   );
 }

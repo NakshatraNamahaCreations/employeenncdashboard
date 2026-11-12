@@ -1,6 +1,8 @@
 import Linkify from "../../Linkify";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilePick } from "../../FilePick";
+import { createPortal } from "react-dom";
+import { Plus, ArrowLeft, ChevronRight, Paperclip, MessageSquare, FolderKanban, Search, PlayCircle, CheckCircle2 } from "lucide-react";
 export { FilePick };
 import { Link, Navigate, useParams } from "react-router-dom";
 import { usePortal } from "../../auth/store";
@@ -285,34 +287,77 @@ const fmtMins = (m) => (!m ? "" : m < 60 ? `${m} min` : `${Math.round(m / 6) / 1
 const isImg = (f) => /^image\//.test(f.type || "") || /\.(png|jpe?g|gif|webp)$/i.test(f.url);
 const fullUrl = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
 
-// Attached screenshots and documents
+// Attached screenshots, videos and documents. Pictures and videos show as small previews;
+// a click opens them large (videos play in their original quality). Documents stay as file chips.
+const isVid = (f) => /^video\//.test(f.type || "") || /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(f.url || "");
 function Files({ list }) {
+  const [big, setBig] = useState(null);
+  useEffect(() => {
+    if (!big) return undefined;
+    const k = (e) => { if (e.key === "Escape") setBig(null); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [big]);
   if (!list?.length) return null;
+  const media = list.filter(f => isImg(f) || isVid(f)), docs = list.filter(f => !isImg(f) && !isVid(f));
   return (
-    <div className="bug-files">
-      {list.map((f, i) => (
-        <a key={i} href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" className={isImg(f) ? "bf-img" : "bf-doc"} title={f.name}>
-          {isImg(f) ? <img src={fileUrl(f.url)} alt={f.name} loading="lazy" /> : <span>{f.name}</span>}
-        </a>
-      ))}
-    </div>
+    <>
+      {media.length > 0 && (
+        <div className="bf-media">
+          {media.map((f, i) => (
+            <button key={i} type="button" className={`bf-tile${isVid(f) ? " vid" : ""}`} title={f.name} onClick={(e) => { e.stopPropagation(); setBig(f); }}>
+              {isVid(f) ? <video src={`${fileUrl(f.url)}#t=0.5`} preload="metadata" muted playsInline /> : <img src={fileUrl(f.url)} alt={f.name} loading="lazy" />}
+              {isVid(f) && <span className="bf-play"><PlayCircle size={26} /></span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {docs.length > 0 && (
+        <div className="bug-files">
+          {docs.map((f, i) => <a key={i} href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" className="bf-doc" title={f.name}><span>{f.name}</span></a>)}
+        </div>
+      )}
+      {big && createPortal(
+        <div className="bf-box" role="dialog" aria-modal="true" aria-label={big.name} onClick={(e) => { e.stopPropagation(); setBig(null); }}>
+          <div className="bf-box-in" onClick={(e) => e.stopPropagation()}>
+            {isVid(big) ? <video src={fileUrl(big.url)} controls autoPlay playsInline /> : <img src={fileUrl(big.url)} alt={big.name} />}
+            <div className="bf-box-f">
+              <span>{big.name}</span>
+              <a href={fileUrl(big.url)} target="_blank" rel="noopener noreferrer">Open in a new tab</a>
+              <button type="button" onClick={() => setBig(null)}>Close</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
-function BugLi({ b, onOpen, children }) {
+// One bug as a card: severity colour on the left, the essentials, status on the right. Click to open.
+function BugCard({ b, tester, onOpen, onVerify }) {
   const m = b.meta || {}, nc = (m.comments || []).filter(c => c.text || c.files?.length).length;
+  const open = onOpen ? () => onOpen(b) : null;
   return (
-    <div className="li">
-      <div className="x">
-        <span className="tag">{m.bug}</span><b>{b.title}</b>
-        <span className="sub">{[b.refName, m.mod, m.sev, fmtMins(m.mins), m.assignName ? `to ${m.assignName}` : "", b.account?.name ? `by ${b.account.name}` : "", fd(b.date)].filter(Boolean).join(" · ")}</span>
-        {m.steps && <span className="sub">Steps: <Linkify text={m.steps} /></span>}
-        {m.note && <span className="sub">Note: <Linkify text={m.note} /></span>}
-        {b.url && <a className="url" href={b.url} target="_blank" rel="noopener noreferrer">{b.url.replace(/^https?:\/\//, "")}</a>}
-        {(m.files?.length > 0 || nc > 0) && <span className="sub">{[m.files?.length ? `${m.files.length} attachment${m.files.length > 1 ? "s" : ""}` : "", nc ? `${nc} comment${nc > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ")}</span>}
+    <div className={`bg-card sev-${String(m.sev || "Medium").toLowerCase()}${open ? " click" : ""}`} {...(open ? { role: "button", tabIndex: 0, onClick: open, onKeyDown: (e) => { if (e.key === "Enter") open(); } } : {})}>
+      <div className="bg-main">
+        <div className="bg-top"><span className="bg-id">{m.bug}</span><b className="bg-title">{b.title}</b></div>
+        <div className="bg-meta">
+          <span className={`bg-sev s-${String(m.sev || "Medium").toLowerCase()}`}>{m.sev || "Medium"}</span>
+          {b.refName && <span><FolderKanban size={13} /> {b.refName}</span>}
+          {m.mod && <span>{m.mod}</span>}
+          <span>{tester ? `To ${m.assignName || "-"}` : `From ${b.account?.name || "-"}`}</span>
+          <span>{fd(b.date)}</span>
+          {m.files?.length > 0 && <span><Paperclip size={13} /> {m.files.length}</span>}
+          {nc > 0 && <span><MessageSquare size={13} /> {nc}</span>}
+        </div>
+        {m.steps && <p className="bg-steps"><Linkify text={m.steps} /></p>}
       </div>
-      {bugPill(m.status)}<SeenPill m={m} />{children}
-      {onOpen && <button type="button" className="btn sm" onClick={() => onOpen(b)}>View</button>}
+      <div className="bg-side">
+        <div className="bg-pills">{bugPill(m.status)}<SeenPill m={m} /></div>
+        {onVerify && m.status === "fixed" && <button type="button" className="btn sm p" onClick={(e) => { e.stopPropagation(); onVerify(b); }}><CheckCircle2 size={14} /> Verified</button>}
+        {open && <span className="bg-open">Open <ChevronRight size={15} /></span>}
+      </div>
     </div>
   );
 }
@@ -338,7 +383,7 @@ function BugView({ bug, tester, onClose, act, onSeen }) {
   const [st, setSt] = useState(m.status === "reopened" ? "progress" : m.status);
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]);
-  const [fix, setFix] = useState({ url: "", hrs: "" });
+  const [fix, setFix] = useState({ url: "", h: "", m: "0" });
   const [busy, setBusy] = useState(false);
   const thread = (m.comments || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
   const devCan = !tester && m.status !== "verified";
@@ -360,7 +405,7 @@ function BugView({ bug, tester, onClose, act, onSeen }) {
   const submit = async (e) => {
     e.preventDefault();
     if (devCan && st !== m.status) {
-      await send({ action: "status", status: st, note: text.trim(), url: fullUrl(fix.url), hrs: +fix.hrs || 0 }, `Status: ${ST[st][0].replace(", to verify", "")}`);
+      await send({ action: "status", status: st, note: text.trim(), url: fullUrl(fix.url), hrs: Math.round(((+fix.h || 0) + (+fix.m || 0) / 60) * 100) / 100 }, `Status: ${ST[st][0].replace(", to verify", "")}`);
     } else if (text.trim() || files.length) {
       await send({ action: "comment", text: text.trim() }, "Comment sent");
     } else toast("Write a comment or change the status");
@@ -399,7 +444,11 @@ function BugView({ bug, tester, onClose, act, onSeen }) {
           {devCan && st === "fixed" && st !== m.status && (
             <div className="g2">
               <div className="f"><label htmlFor="bv-u">Commit link for the fix</label><input id="bv-u" type="text" value={fix.url} onChange={e => setFix(s => ({ ...s, url: e.target.value }))} /></div>
-              <div className="f"><label htmlFor="bv-h">Time spent (hours)</label><input id="bv-h" type="number" min="0" step="0.25" value={fix.hrs} onChange={e => setFix(s => ({ ...s, hrs: e.target.value }))} /></div>
+              <div className="f"><label htmlFor="bv-h">Time spent</label>
+                <div className="lw-time">
+                  <input id="bv-h" type="number" min="0" max="16" step="1" value={fix.h} placeholder="0" onChange={e => setFix(s => ({ ...s, h: e.target.value }))} aria-label="Hours" /><span>h</span>
+                  <select value={fix.m} onChange={e => setFix(s => ({ ...s, m: e.target.value }))} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(x => <option key={x} value={x}>{x}</option>)}</select><span>min</span>
+                </div></div>
             </div>
           )}
           <div className="f"><label htmlFor="bv-t">{tester ? "Comment for the developer" : "Comment for the tester"}</label>
@@ -422,12 +471,14 @@ const b4 = (b) => (b.account?.name ? `by ${b.account.name}` : "");
 const fdt = (d) => { const x = new Date(d); return `${fd(iso(x))}, ${x.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`; };
 
 // Tester: send many bugs to one developer in one go
+const OTHER = "__other";
 const newRow = () => ({ k: Math.random().toString(36).slice(2), title: "", mod: "", sev: "Medium", steps: "", t: "", unit: "min", url: "", files: [] });
 function SendBugs({ onSent }) {
   const P = usePortal();
   const projects = P.assigned.projects;
   const [devs, setDevs] = useState(null);
-  const [ref, setRef] = useState(projects[0]?.id || "");
+  const [ref, setRef] = useState(projects[0]?.id || OTHER);
+  const [otherName, setOtherName] = useState("");         // project typed in when it is not in the list
   const [dev, setDev] = useState("");
   const [rows, setRows] = useState([newRow()]);
   const [busy, setBusy] = useState(false);
@@ -440,30 +491,39 @@ function SendBugs({ onSent }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!filled.length) { toast("Add at least one bug"); return; }
+    if (ref === OTHER && !otherName.trim()) { toast("Type the project name"); return; }
     setBusy(true);
     try {
       const items = filled.map(r => ({ title: r.title.trim(), mod: r.mod.trim(), sev: r.sev, steps: r.steps.trim(), mins: mins(r), url: fullUrl(r.url.trim()), files: r.files }));
-      await api("/bugs/batch", { method: "POST", body: { refId: ref, assign: dev, date: today(), items } });
+      const where = ref === OTHER ? { refId: "", refName: otherName.trim() } : { refId: ref };
+      await api("/bugs/batch", { method: "POST", body: { ...where, assign: dev, date: today(), items } });
       toast(`${items.length} bug${items.length > 1 ? "s" : ""} sent to ${devs.find(d => d.id === dev)?.name || "the developer"}`);
       setRows([newRow()]); P.refresh(); onSent();
     } catch (ex) { toast(ex.message); }
     finally { setBusy(false); }
   };
 
-  if (!projects.length) return <div className="empty">No projects are assigned to you yet. Ask your manager to assign you in the CRM.</div>;
   return (
     <form onSubmit={submit}>
       <section className="card sb-top">
         <div className="sb-step"><span className="lw-n">1</span><b>Where and to whom</b></div>
         <div className="g2">
           <div className="f"><label htmlFor="sb-p">Project</label>
-            <select id="sb-p" value={ref} onChange={e => setRef(e.target.value)} required>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <select id="sb-p" value={ref} onChange={e => setRef(e.target.value)} required>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              <option value={OTHER}>Other (not in this list)</option>
+            </select></div>
           <div className="f"><label htmlFor="sb-d">Send to developer</label>
             <select id="sb-d" value={dev} onChange={e => setDev(e.target.value)} required>
               <option value="">{devs === null ? "Loading…" : devs.length ? "Choose a developer" : "No developers have an account yet"}</option>
               {(devs || []).map(d => <option key={d.id} value={d.id}>{d.name} · {ROLES[d.role]?.l || ""}</option>)}
             </select></div>
         </div>
+        {ref === OTHER && (
+          <div className="f sb-other"><label htmlFor="sb-o">Project name</label>
+            <input id="sb-o" type="text" value={otherName} onChange={e => setOtherName(e.target.value)} required autoFocus maxLength={160} placeholder="Type the project or website name" />
+            <span className="sub">Use this when the project is not assigned to you yet. The developer sees this name on the bug.</span></div>
+        )}
       </section>
 
       <div className="sb-step"><span className="lw-n">2</span><b>The bugs</b><span className="sub">one card per bug</span></div>
@@ -494,21 +554,41 @@ function SendBugs({ onSent }) {
       ))}
       <button type="button" className="sb-add" onClick={() => setRows(L => [...L, newRow()])}>+ Add another bug</button>
       <div className="sb-bar">
-        <span><b>{filled.length} bug{filled.length === 1 ? "" : "s"}</b>{dev ? ` to ${devs?.find(d => d.id === dev)?.name || ""}` : " · choose a developer"}{total ? ` · ${fmtMins(total)} on your timesheet` : ""}</span>
+        <span><b>{filled.length} bug{filled.length === 1 ? "" : "s"}</b>{ref === OTHER && otherName.trim() ? ` for ${otherName.trim()}` : ""}{dev ? ` to ${devs?.find(d => d.id === dev)?.name || ""}` : " · choose a developer"}{total ? ` · ${fmtMins(total)} on your timesheet` : ""}</span>
         <button className="btn p lg" disabled={busy || !dev || !filled.length}>{busy ? "Sending…" : `Send ${filled.length > 1 ? `${filled.length} bugs` : "bug"}`}</button>
       </div>
     </form>
   );
 }
 
+// The page in four simple boxes. Each role sees them in its own words.
+const IN = (L) => (s) => L.includes(s);
+const DEV_TABS = [
+  ["fix", "To fix", IN(["open", "reopened"]), "red", "New and reopened bugs sent to you. Open one to see the details, then set it to In progress or Fixed."],
+  ["work", "Working on", IN(["progress", "info"]), "amb", "Bugs you are fixing, or waiting for more information from the tester."],
+  ["tester", "With the tester", IN(["fixed", "notbug"]), "blue", "You marked these fixed or not a bug. The tester checks them next."],
+  ["done", "Verified", IN(["verified"]), "ok", "The tester checked these and confirmed they are fixed."],
+];
+const TEST_TABS = [
+  ["check", "To check", IN(["fixed", "notbug"]), "blue", "The developer says these are fixed (or not a bug). Check each one, then tap Verified, or open it and Reopen."],
+  ["work", "Developer working", IN(["progress", "info"]), "amb", "The developer is fixing these, or has asked you for more information."],
+  ["new", "Not started yet", IN(["open", "reopened"]), "red", "Sent to the developer, not picked up yet. The label shows if they have opened it."],
+  ["done", "Verified", IN(["verified"]), "ok", "Bugs you checked and confirmed as fixed."],
+];
+
 function Bugs() {
   const P = usePortal();
   const tester = hasRole(P.session.user, ["test"]);
+  const TABS = tester ? TEST_TABS : DEV_TABS;
   const [tab, setTab] = useState("list");
+  const [st, setSt] = useState(TABS[0][0]);
+  const [proj, setProj] = useState("");
+  const [sev, setSev] = useState("");
+  const [q, setQ] = useState("");
   const B = useGet("/bugs");
   const Act = useGet("/bugs/activity");
   const [viewId, setViewId] = useState(null);
-  const all = (B.data || []).slice().sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1));
+  const all = (B.data || []).slice().sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1) || String(b.createdAt).localeCompare(String(a.createdAt)));
   const view = all.find(b => b._id === viewId) || Act.data?.bugs.find(b => b._id === viewId) || null;
   const reload = B.reload, reloadAct = Act.reload;
   // Keep the open bug and the counts fresh while the page is open
@@ -517,51 +597,73 @@ function Bugs() {
     try { await api(`/bugs/${id}`, { method: "PATCH", body }); toast(ok); B.reload(); Act.reload(); P.refresh(); return true; }
     catch (ex) { toast(ex.message); return false; }
   };
-  const open = all.filter(b => ["open", "reopened"].includes(b.meta?.status));
-  const working = all.filter(b => ["progress", "info"].includes(b.meta?.status));
-  const fixed = all.filter(b => b.meta?.status === "fixed");
-  const notbug = all.filter(b => b.meta?.status === "notbug");
-  const done = all.filter(b => b.meta?.status === "verified").slice(0, 15);
-  const li = (b, extra) => <BugLi key={b._id} b={b} onOpen={(x) => setViewId(x._id)}>{extra}</BugLi>;
-  const list = (L, empty) => (L.length ? L.map(b => li(b)) : <div className="empty">{B.loading ? "Loading…" : empty}</div>);
+  // filters: project (BUG-121), severity and search; the boxes count what the filters leave
+  const projects = [...new Set(all.map(b => b.refName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const ql = q.trim().toLowerCase();
+  const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev)
+    && (!ql || `${b.meta?.bug} ${b.title} ${b.meta?.steps} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql)));
+  const fnOf = (k) => TABS.find(t => t[0] === k)[2];
+  const cnt = (k) => base.filter(b => fnOf(k)(b.meta?.status)).length;
+  const cur = TABS.find(t => t[0] === st) || TABS[0];
+  const shown = base.filter(b => cur[2](b.meta?.status)).slice(0, st === "done" ? 40 : 300);
+  const filtered = !!(proj || sev || ql);
+
   return (
     <>
-      <h2 className="t">{tester ? "Bugs" : "My bugs"}<span>.</span></h2>
-      <p className="lead">{tester ? "Send bugs to a developer, with screenshots, documents and the time you spent. Follow their status and comments here, then verify or reopen." : "Bugs testers sent you, highest priority first. Open one to see the screenshots, change its status and reply to the tester."}</p>
-      {tester && (
-        <div className="seg" style={{ maxWidth: 420 }}>
-          <button type="button" className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>My bugs ({all.length})</button>
-          <button type="button" className={tab === "send" ? "on" : ""} onClick={() => setTab("send")}>Send bugs</button>
+      <div className="bg-head">
+        <div>
+          <h2 className="t">{tester ? "Bugs" : "My bugs"}<span>.</span></h2>
+          <p className="lead">{tester ? "Report bugs to a developer and follow them until they are fixed." : "Bugs testers sent you. Open one, fix it, and mark it Fixed."}</p>
         </div>
-      )}
+        {tester && (tab === "list"
+          ? <button type="button" className="btn p lg" onClick={() => setTab("send")}><Plus size={17} /> Report bugs</button>
+          : <button type="button" className="btn lg" onClick={() => setTab("list")}><ArrowLeft size={16} /> Back to my bugs</button>)}
+      </div>
       {B.err && <div className="alert am">{B.err}</div>}
-      {tester && tab === "send" ? <SendBugs onSent={() => { setTab("list"); B.reload(); }} /> : (
-        <>
-          {tester ? (
-            <>
-              <section className="card"><h3>Fixed, waiting for you <small>{fixed.length + notbug.length}</small></h3>
-                {fixed.length + notbug.length ? [...fixed, ...notbug].map(b => li(b, b.meta?.status === "fixed" &&
-                  <button type="button" className="btn sm p" onClick={() => act(b._id, { action: "verify" }, "Bug verified")}>Verified</button>))
-                  : <div className="empty">{B.loading ? "Loading…" : "Nothing to verify."}</div>}</section>
-              <section className="card"><h3>Developer working on it <small>{working.length}</small></h3>{list(working, "None.")}</section>
-              <section className="card"><h3>Still open <small>{open.length}</small></h3>{list(open, "No open bugs.")}</section>
-            </>
-          ) : (
-            <>
-              <section className="card"><h3>To fix <small>{open.length}</small></h3>{list(open, "No new bugs for you.")}</section>
-              <section className="card"><h3>In progress or waiting for info <small>{working.length}</small></h3>{list(working, "None.")}</section>
-              <section className="card"><h3>Fixed, with the tester <small>{fixed.length + notbug.length}</small></h3>{list([...fixed, ...notbug], "None.")}</section>
-            </>
-          )}
-          <section className="card"><h3>Recently verified</h3>{list(done, "None.")}</section>
 
-          <section className="card"><h3>{tester ? "Test runs" : "Test runs on my projects"} <small>{Act.data?.tests.length || 0}</small></h3>
+      {tester && tab === "send" ? <SendBugs onSent={() => { setTab("list"); setSt("new"); B.reload(); }} /> : (
+        <>
+          <div className="bg-tiles" role="tablist" aria-label="Bug status">
+            {TABS.map(([k, l, , c]) => (
+              <button key={k} type="button" role="tab" aria-selected={st === k} className={`bg-tile c-${c}${st === k ? " on" : ""}`} onClick={() => setSt(k)}>
+                <span className="n">{B.data == null ? "-" : cnt(k)}</span><span className="l">{l}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-filters">
+            <select value={proj} onChange={e => setProj(e.target.value)} aria-label="Project">
+              <option value="">All projects</option>
+              {projects.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <div className="bg-seg" role="group" aria-label="Severity">
+              {[["", "All"], ["High", "High"], ["Medium", "Medium"], ["Low", "Low"]].map(([k, l]) => (
+                <button key={l} type="button" className={`${sev === k ? "on" : ""} ${k ? `s-${k.toLowerCase()}` : ""}`} onClick={() => setSev(k)}>{l}</button>
+              ))}
+            </div>
+            <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number, title or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
+            {filtered && <button type="button" className="btn sm" onClick={() => { setProj(""); setSev(""); setQ(""); }}>Clear</button>}
+          </div>
+
+          <p className="bg-hint">{cur[4]}</p>
+          <section className="bg-list">
+            {B.data == null ? <div className="card"><div className="empty">Loading…</div></div>
+              : shown.length ? shown.map(b => <BugCard key={b._id} b={b} tester={tester} onOpen={(x) => setViewId(x._id)} onVerify={tester ? (x) => act(x._id, { action: "verify" }, "Bug verified") : null} />)
+                : <div className="card bg-empty"><CheckCircle2 size={28} /><b>{filtered ? "No bugs match these filters" : "Nothing here"}</b>
+                  <span className="sub">{filtered ? "Change or clear the filters above." : tester && st === "new" ? "Use Report bugs to send one." : "All clear in this box."}</span></div>}
+          </section>
+
+          <details className="card bg-more">
+            <summary>{tester ? "My test runs" : "Test runs on my projects"} <small>{Act.data?.tests.length || 0}</small></summary>
             {Act.data?.tests.length ? Act.data.tests.map(t => <TestLi key={t._id} t={t} />)
-              : <div className="empty">{Act.loading ? "Loading…" : tester ? "Log a test run from Log work." : "No test runs on your projects yet."}</div>}</section>
+              : <div className="empty">{Act.loading ? "Loading…" : tester ? "Log a test run from Log work." : "No test runs on your projects yet."}</div>}
+          </details>
           {!tester && (
-            <section className="card"><h3>Other bugs on my projects <small>{Act.data?.bugs.length || 0}</small></h3>
-              {Act.data?.bugs.length ? Act.data.bugs.map(b => <BugLi key={b._id} b={b} />)
-                : <div className="empty">{Act.loading ? "Loading…" : "No bugs raised for your teammates on these projects."}</div>}</section>
+            <details className="card bg-more">
+              <summary>Bugs for my teammates on these projects <small>{Act.data?.bugs.length || 0}</small></summary>
+              <div className="bg-list in">{Act.data?.bugs.length ? Act.data.bugs.map(b => <BugCard key={b._id} b={b} tester={false} />)
+                : <div className="empty">{Act.loading ? "Loading…" : "No bugs raised for your teammates on these projects."}</div>}</div>
+            </details>
           )}
         </>
       )}

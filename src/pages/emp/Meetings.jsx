@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Mail, MessageCircle } from "lucide-react";
 import { usePortal } from "../../auth/store";
 import { api, upload, fileUrl } from "../../api";
@@ -8,7 +9,10 @@ import { confirmBox } from "../../confirm";
 import { today, fd, fdw, ampm, greet, nowHM } from "../../util";
 
 // The meeting's time has come (today with no time, or the time has passed): its MOM points can be added
-const isOver = (m) => !!m && (m.date < today() || (m.date === today() && (!m.time || m.time <= nowHM())));
+const isOver = (m) => !!m && (m.date < today() || (m.date === today() && !!m.time && m.time <= nowHM()));
+// a meeting link typed without https:// still works
+const normLink = (u) => { const v = String(u || "").trim(); return !v ? "" : /^https?:\/\//i.test(v) ? v : `https://${v}`; };
+const HM = (dur) => { const t = Math.round((+dur || 1) * 60); return [Math.floor(t / 60), Math.round((t % 60) / 5) * 5 % 60]; };
 const hasPoints = (m) => !!(String(m.notes || "").trim() || m.files?.length || m.imgCount);
 
 /* Basic minutes from typed notes: sorts lines into points, decisions, actions and questions. */
@@ -112,6 +116,9 @@ export default function Meetings() {
   const [sub, setSub] = useState("");
   const [sending, setSending] = useState(false);
   const [early, setEarly] = useState("");         // meeting id opened for its MOM before its time
+  const [newDate, setNewDate] = useState("");     // date picked on the calendar for a new meeting
+  const [flash, setFlash] = useState("");         // the meeting just scheduled, highlighted in the list
+  const [sp, setSp] = useSearchParams();
   const meInfo = { name: u.name, role: roleL };
   const fillT = (x, k, momT) => {
     const t = TEMPLATES.find(y => y.k === k) || TEMPLATES[0];
@@ -162,8 +169,10 @@ export default function Meetings() {
     const notes = d.notes !== undefined ? d.notes : m?.notes || "";
     if (points && !notes.trim() && !shots.length && !files.length) { toast("Write the MOM points or attach a document or photo"); return; }
     if (invite && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.cemail.trim())) { toast("Add the client's email to send the invite"); return; }
+    const dur = (+d.dh || 0) + (+d.dm || 0) / 60;
+    if (dur <= 0) { toast("Enter how long the meeting is, in hours and minutes"); return; }
     const id = m?._id || savedId.current;
-    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: +d.dur || 1, mode: d.mode, theirs: d.theirs, ours: d.ours, notes, files, clientEmail: d.cemail.trim(), clientPhone: d.cphone.trim(), link: d.link.trim(), planned: true };
+    const rec = { ...(m || {}), ...(id ? { _id: id } : {}), refName: d.ref.trim(), title: d.title.trim(), date: d.date || today(), time: d.time || "", dur: Math.round(dur * 100) / 100, mode: d.mode, theirs: d.theirs, ours: d.ours, notes, files, clientEmail: d.cemail.trim(), clientPhone: d.cphone.trim(), link: normLink(d.link), planned: true };
     if (!id || full === id) rec.images = shots;
     if (withMom) rec.momTxt = momText(rec, { name: u.name, role: roleL });
     setBusy(true);
@@ -183,7 +192,10 @@ export default function Meetings() {
       return;
     }
     if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes written from your points. Check them before sending."); }
-    else if (kind === "schedule") { fillT(rec, "invite"); toast("Meeting scheduled. After the meeting, open it here and add the MOM points."); }
+    else if (kind === "schedule") {
+      toast(`Meeting scheduled for ${fdw(rec.date)}${rec.time ? `, ${ampm(rec.time)}` : ""}. After the meeting, open it and add the MOM points.`);
+      setMid(""); setNewDate(""); setFlash(doc._id); window.scrollTo(0, 0);
+    }
     else { fillT(rec, mom ? "mom" : isOver(rec) ? "invite" : "reminder", mom); toast(points ? "MOM points saved" : "Meeting details saved"); }
   };
   // Record each send (WhatsApp or email, and to whom) in the meeting's send history
@@ -206,6 +218,14 @@ export default function Meetings() {
     } catch (ex) { toast(ex.message); }
     finally { setSending(false); }
   };
+  const startNew = (date) => { savedId.current = ""; setFull(""); setMid("new"); setShots([]); setFiles([]); setMom(""); setNewDate(date || ""); setFlash(""); window.scrollTo(0, 0); };
+  const go = useRef({});
+  useEffect(() => { go.current = { startNew, openM }; });
+  useEffect(() => {
+    const n = sp.get("new"), o = sp.get("open");
+    if (n && /^\d{4}-\d{2}-\d{2}$/.test(n)) { go.current.startNew(n); setSp({}, { replace: true }); }
+    else if (o && P.meetings.some(x => x._id === o)) { go.current.openM(o); setSp({}, { replace: true }); }
+  }, [sp, setSp, P.meetings]);
   const momOpen = !!m && (isOver(m) || early === m._id || !!m.momTxt || hasPoints(m));
   const del = async () => { if (await confirmBox({ title: "Delete this meeting?", text: "Its MOM points and minutes are deleted too.", ok: "Delete", danger: true })) { P.removeMeeting(m._id); setMid(""); } };
   const waNum = (() => { const d = waTo.replace(/\D/g, ""); return d.length === 10 ? `91${d}` : d; })();
@@ -216,9 +236,9 @@ export default function Meetings() {
   const list = (
     <section className="card"><h3>My meetings <small>{L.length}</small>
       <input className="r mt-q" type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} aria-label="Search meetings" />
-      <button type="button" className="btn sm p" onClick={() => { savedId.current = ""; setFull(""); setMid("new"); setShots([]); setFiles([]); setMom(""); }}>+ Schedule a meeting</button></h3>
+      <button type="button" className="btn sm p" onClick={() => startNew("")}>+ Schedule a meeting</button></h3>
       {shown.length ? shown.map(x => (
-        <button key={x._id} type="button" className={`mcard ${mid === x._id ? "on" : ""}`} onClick={() => openM(x._id)}>
+        <button key={x._id} type="button" className={`mcard ${mid === x._id ? "on" : ""} ${flash === x._id ? "flash" : ""}`} onClick={() => openM(x._id)}>
           <b style={{ display: "block", color: "var(--navy)", fontWeight: 600 }}>{x.title}</b>
           <span className="sub">{x.refName || "Internal"} · {fd(x.date)}{x.time ? `, ${ampm(x.time)}` : ""} · {x.mode}{(x.sendLog || []).length ? ` · sent ${x.sendLog.length}×` : ""}{x.files?.length ? ` · ${x.files.length} document${x.files.length > 1 ? "s" : ""}` : ""}</span>{status(x)}
         </button>
@@ -272,9 +292,13 @@ export default function Meetings() {
               <datalist id="m1l">{[...P.assigned.clients, ...P.assigned.projects].map(r => <option key={r.id} value={r.name} />)}</datalist></div>
             <div className="f"><label htmlFor="m2">Meeting about</label><input id="m2" name="title" type="text" required defaultValue={m?.title || ""} placeholder="UAT walkthrough, design review, monthly report..." /></div>
             <div className="g3">
-              <div className="f"><label htmlFor="m3">Date</label><input id="m3" name="date" type="date" required defaultValue={m?.date || today()} /></div>
+              <div className="f"><label htmlFor="m3">Date</label><input id="m3" name="date" type="date" required defaultValue={m?.date || newDate || today()} /></div>
               <div className="f"><label htmlFor="m4">Time</label><input id="m4" name="time" type="time" defaultValue={m?.time || ""} /></div>
-              <div className="f"><label htmlFor="m5">Hours</label><input id="m5" name="dur" type="number" min="0.25" step="0.25" defaultValue={m?.dur || 1} /></div>
+              <div className="f"><label htmlFor="m5">Duration</label>
+                <div className="lw-time">
+                  <input id="m5" name="dh" type="number" min="0" max="12" step="1" defaultValue={HM(m?.dur)[0]} aria-label="Hours" /><span>h</span>
+                  <select name="dm" defaultValue={HM(m?.dur)[1]} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(x => <option key={x} value={x}>{x}</option>)}</select><span>min</span>
+                </div></div>
             </div>
             <div className="g2">
               <div className="f"><label htmlFor="m6">How</label><select id="m6" name="mode" defaultValue={m?.mode || "Google Meet"}>{["Google Meet", "In person", "Phone call", "Zoom"].map(x => <option key={x}>{x}</option>)}</select></div>
@@ -285,7 +309,7 @@ export default function Meetings() {
               <div className="f"><label htmlFor="m12">Client email (invite and minutes)</label><input id="m12" name="cemail" type="email" defaultValue={m?.clientEmail || ""} placeholder="client@company.com" /></div>
               <div className="f"><label htmlFor="m13">Client WhatsApp</label><input id="m13" name="cphone" type="tel" defaultValue={m?.clientPhone || ""} placeholder="98450 12345" /></div>
             </div>
-            <div className="f"><label htmlFor="m14">Meeting link</label><input id="m14" name="link" type="url" defaultValue={m?.link || ""} placeholder="https://meet.google.com/..." /></div>
+            <div className="f"><label htmlFor="m14">Meeting link</label><input id="m14" name="link" type="text" inputMode="url" defaultValue={m?.link || ""} placeholder="meet.google.com/abc-defg-hij" /></div>
 
             {!m && (
               <div className="row">
