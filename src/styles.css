@@ -284,3 +284,8 @@ tr:last-child td { border-bottom: 0; }
 .pj-person a.sub { display: block; text-decoration: none; }
 .pj-person a.sub:hover { color: var(--pri); }
 @media (max-width: 700px) { .pj-grid, .pj-ints { grid-template-columns: 1fr; } .pj-steps span { display: none; } .pj-sec { grid-template-columns: 70px minmax(0, 1fr) auto auto; } }
+
+/* number boxes: no up / down arrows */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
