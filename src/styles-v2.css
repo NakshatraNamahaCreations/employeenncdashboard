@@ -744,3 +744,7 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .tpl-send h3 svg { color: var(--pri); }
 .tpl-btn { width: 100%; justify-content: center; margin-top: 4px; }
 @media (max-width: 980px) { .tpl-grid { grid-template-columns: 1fr; } .tpl-side { position: static; } }
+
+/* menu button: hide the side menu on a computer */
+.iconbtn.menu { display: inline-grid; }
+@media (min-width: 901px) { body.navhide aside.nav { display: none; } }

@@ -145,6 +145,15 @@ export function EmpLayout() {
   const all = groups.flatMap(g => g[1]);
   const cur = all.find(t => (t.end ? pathname === t.to : pathname.startsWith(t.to))) || all[0];
   const close = () => document.body.classList.remove("navopen");
+  // menu button: on a phone it slides the menu in; on a computer it hides or shows the side menu (remembered)
+  const toggleNav = () => {
+    if (window.matchMedia("(max-width: 900px)").matches) { document.body.classList.toggle("navopen"); return; }
+    const hide = document.body.classList.toggle("navhide");
+    try { localStorage.setItem("nnc-nav-hide", hide ? "1" : ""); } catch { /* storage blocked */ }
+  };
+  useEffect(() => {
+    try { if (localStorage.getItem("nnc-nav-hide")) document.body.classList.add("navhide"); } catch { /* storage blocked */ }
+  }, []);
   const out = async () => {
     if (await confirmBox({ title: "Sign out?", text: "You will need your email and password to sign in again.", ok: "Sign out", danger: true })) { signOut(); nav("/login"); }
   };
@@ -171,7 +180,7 @@ export function EmpLayout() {
       <div className="navscrim" onClick={close} />
       <main className="app">
         <div className="bar">
-          <button type="button" className="iconbtn menu" aria-label="Menu" onClick={() => document.body.classList.toggle("navopen")}><Menu size={18} /></button>
+          <button type="button" className="iconbtn menu" aria-label="Show or hide the menu" title="Show or hide the menu" onClick={toggleNav}><Menu size={18} /></button>
           <div className="bar-t"><b>{cur.label}</b><span className="s">{cur.sub}</span></div>
           <span className="r">
             <CheckInOut />
