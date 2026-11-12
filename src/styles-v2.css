@@ -705,3 +705,13 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 @keyframes mt-flash { 0%, 40% { background: #DBEAFE; } 100% { background: transparent; } }
 .cal-add { padding: 12px 16px; border-top: 1px solid var(--line); }
 .cal-add .btn { width: 100%; justify-content: center; }
+
+/* header avatar opens My profile; bug date filter */
+.av-link { text-decoration: none; cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.av-link:hover, .av-link:focus-visible { box-shadow: 0 0 0 3px rgba(37, 99, 235, .25); transform: scale(1.05); outline: none; }
+.av-link.active { box-shadow: 0 0 0 3px rgba(37, 99, 235, .35); }
+.bg-filters select.on { border-color: var(--pri); color: var(--pri); font-weight: 600; }
+.bg-dates { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.bg-dates label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mut); }
+.bg-dates input { height: 40px; border: 1px solid var(--line); border-radius: 12px; padding: 0 10px; font: inherit; font-size: 13.5px; background: #fff; color: var(--navy); }
+.bg-range { color: var(--navy); font-weight: 600; }

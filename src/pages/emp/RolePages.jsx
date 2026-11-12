@@ -576,6 +576,20 @@ const TEST_TABS = [
   ["done", "Verified", IN(["verified"]), "ok", "Bugs you checked and confirmed as fixed."],
 ];
 
+// Date filter on the day a bug was raised
+const DATES = [["", "All dates"], ["today", "Today"], ["yday", "Yesterday"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["lmonth", "Last month"], ["custom", "Custom dates…"]];
+function rangeOf(k, f, t) {
+  const T0 = today(), back = (n) => iso(new Date(Date.now() - n * 864e5));
+  if (k === "today") return [T0, T0];
+  if (k === "yday") return [back(1), back(1)];
+  if (k === "7") return [back(6), T0];
+  if (k === "30") return [back(29), T0];
+  if (k === "month") return [monthStart(), T0];
+  if (k === "lmonth") { const d = new Date(); return [iso(new Date(d.getFullYear(), d.getMonth() - 1, 1)), iso(new Date(d.getFullYear(), d.getMonth(), 0))]; }
+  if (k === "custom" && (f || t)) return [f || "0000-00-00", t || "9999-12-31"];
+  return null;
+}
+
 function Bugs() {
   const P = usePortal();
   const tester = hasRole(P.session.user, ["test"]);
@@ -585,6 +599,9 @@ function Bugs() {
   const [proj, setProj] = useState("");
   const [sev, setSev] = useState("");
   const [q, setQ] = useState("");
+  const [dk, setDk] = useState("");
+  const [dFrom, setDFrom] = useState("");
+  const [dTo, setDTo] = useState("");
   const B = useGet("/bugs");
   const Act = useGet("/bugs/activity");
   const [viewId, setViewId] = useState(null);
@@ -600,13 +617,14 @@ function Bugs() {
   // filters: project (BUG-121), severity and search; the boxes count what the filters leave
   const projects = [...new Set(all.map(b => b.refName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const ql = q.trim().toLowerCase();
-  const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev)
+  const rg = rangeOf(dk, dFrom, dTo);
+  const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1]))
     && (!ql || `${b.meta?.bug} ${b.title} ${b.meta?.steps} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql)));
   const fnOf = (k) => TABS.find(t => t[0] === k)[2];
   const cnt = (k) => base.filter(b => fnOf(k)(b.meta?.status)).length;
   const cur = TABS.find(t => t[0] === st) || TABS[0];
   const shown = base.filter(b => cur[2](b.meta?.status)).slice(0, st === "done" ? 40 : 300);
-  const filtered = !!(proj || sev || ql);
+  const filtered = !!(proj || sev || ql || rg);
 
   return (
     <>
@@ -642,10 +660,19 @@ function Bugs() {
               ))}
             </div>
             <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number, title or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
-            {filtered && <button type="button" className="btn sm" onClick={() => { setProj(""); setSev(""); setQ(""); }}>Clear</button>}
+            <select value={dk} onChange={e => setDk(e.target.value)} aria-label="Date raised" className={dk ? "on" : ""}>
+              {DATES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            {dk === "custom" && (
+              <span className="bg-dates">
+                <label>From <input type="date" value={dFrom} max={dTo || today()} onChange={e => setDFrom(e.target.value)} /></label>
+                <label>To <input type="date" value={dTo} min={dFrom || undefined} max={today()} onChange={e => setDTo(e.target.value)} /></label>
+              </span>
+            )}
+            {filtered && <button type="button" className="btn sm" onClick={() => { setProj(""); setSev(""); setQ(""); setDk(""); setDFrom(""); setDTo(""); }}>Clear</button>}
           </div>
 
-          <p className="bg-hint">{cur[4]}</p>
+          <p className="bg-hint">{cur[4]}{rg && <b className="bg-range"> · Raised {rg[0] === rg[1] ? fd(rg[0]) : `${rg[0] > "0000-00-00" ? fd(rg[0]) : "the start"} to ${rg[1] < "9999-12-31" ? fd(rg[1]) : "today"}`}</b>}</p>
           <section className="bg-list">
             {B.data == null ? <div className="card"><div className="empty">Loading…</div></div>
               : shown.length ? shown.map(b => <BugCard key={b._id} b={b} tester={tester} onOpen={(x) => setViewId(x._id)} onVerify={tester ? (x) => act(x._id, { action: "verify" }, "Bug verified") : null} />)

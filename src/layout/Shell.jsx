@@ -177,7 +177,7 @@ export function EmpLayout() {
             <span className="today">{new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
             <button type="button" className="iconbtn" aria-label="Messages" onClick={() => nav("/messages")}><MessagesSquare size={18} />{notif.unreadMessages > 0 && <em>{notif.unreadMessages}</em>}</button>
             <Bellbox />
-            <span className="av sm" style={{ background: R.c }} title={u.email}>{initials(u.name)}</span>
+            <NavLink to="/profile" className="av sm av-link" style={{ background: R.c }} title={`My profile · ${u.email}`} aria-label="My profile">{initials(u.name)}</NavLink>
           </span>
         </div>
         <div className="page"><div className="page-in">{closedAt ? (
