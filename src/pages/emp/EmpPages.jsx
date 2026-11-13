@@ -352,7 +352,7 @@ function SendBox() {
 // design and video work: a link or an attached file is needed
 const DESIGN_T = ["logo", "vcard", "brochure", "corpvideo", "instavideo", "motion"];
 
-const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month", "kind", "len", "qty"];
+const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month", "kind", "len", "qty", "sched"];
 
 export function LogWork() {
   const P = usePortal();
@@ -500,6 +500,10 @@ export function LogWork() {
                         <button type="button" className="lw-bx" onClick={() => setBlocks(L => L.filter(x => x.id !== b.id))} aria-label={`Remove ${TY[type].l} ${i + 1}`} title="Remove"><X size={16} /></button></div>
                     )}
                     <Fields type={type} devs={devs} />
+                    {["seo", "gads", "meta", "rep"].includes(TY[type].g) && (
+                      <div className="f" style={{ maxWidth: 320 }}><label htmlFor={`i-w${b.id}_sched`}>Scheduled date <small className="sub" style={{ display: "inline" }}>(optional)</small></label>
+                        <input id={`i-w${b.id}_sched`} name={`w${b.id}_sched`} type="date" /></div>
+                    )}
                     {type !== "bug" && (
                       <div className="f"><label>Screenshots, video or files {["blog", "poster", ...DESIGN_T].includes(type) ? "(or add the link above)" : "(optional)"}</label>
                         <FilePick id={`lw-proof-${b.id}`} files={b.proof} onChange={(f) => setProof(b.id, f)} hint="No link? Paste a screenshot (Ctrl+V), drop a screen recording, or attach the file." /></div>

@@ -115,6 +115,7 @@ export function metaTxt(e) {
   if (m.kws) out.push(`${m.kws} keywords`); if (m.month) out.push(m.month);
   if (m.tools) out.push(m.tools);
   if (m.kind) out.push(m.kind); if (m.len) out.push(`${m.len} sec`); if (m.qty) out.push(`${m.qty} design${m.qty > 1 ? "s" : ""}`);
+  if (m.sched) out.push(`scheduled for ${new Date(`${m.sched}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`);
   if (m.files?.length) out.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return out.join(" · ");
 }
