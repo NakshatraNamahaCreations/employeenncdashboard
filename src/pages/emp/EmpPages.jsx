@@ -291,6 +291,19 @@ function Fields({ type, devs }) {
       <div className="g2"><Inp name="url" label="Figma link" /><Inp name="screens" label="Number of screens" type="number" min="1" defaultValue="1" /></div>
       <SendBox />
     </>);
+    case "logo": return (<><Inp name="title" label="Logo for" required placeholder="Brand or business name" />
+      <div className="g2"><Sel name="kind" label="Stage" opts={["First concepts", "Revision", "Final files"]} /><Inp name="qty" label="Concepts or versions" type="number" min="1" defaultValue="1" /></div>
+      <Inp name="url" label="Drive or image link" /></>);
+    case "vcard": return (<><Inp name="title" label="Visiting card for" required placeholder="Name and designation" />
+      <div className="g2"><Sel name="kind" label="Sides" opts={["Front and back", "Front only"]} /><Inp name="qty" label="Designs or versions" type="number" min="1" defaultValue="1" /></div>
+      <Inp name="url" label="Drive or image link" /></>);
+    case "brochure": return (<><Inp name="title" label="Brochure" required placeholder="Company profile brochure" />
+      <div className="g2"><Sel name="kind" label="Type" opts={["Print", "Digital (PDF)", "Tri-fold", "Bi-fold"]} /><Inp name="pages" label="Pages" type="number" min="1" defaultValue="1" /></div>
+      <Inp name="url" label="Drive or PDF link" /></>);
+    case "corpvideo": case "instavideo": case "motion": return (<><Inp name="title" label="Video" required placeholder={type === "corpvideo" ? "Company profile video" : type === "instavideo" ? "Diwali offer reel" : "Explainer video for the app"} />
+      <div className="g2"><Sel name="kind" label={type === "motion" ? "Kind" : type === "instavideo" ? "Format" : "Kind"} opts={type === "corpvideo" ? ["Company profile", "Event", "Testimonial", "Product or service", "Office or team"] : type === "instavideo" ? ["Reel", "Story", "Feed ad", "Carousel video"] : ["Motion graphics", "Explainer video", "Logo animation", "Text animation"]} />
+        <Inp name="len" label="Length (seconds)" type="number" min="1" placeholder="30" /></div>
+      <Inp name="url" label="Drive or video link" /></>);
     case "poster": return (<><Inp name="title" label="What was designed" required placeholder="Diwali offer post" /><div className="g2"><Inp name="url" label="Image or Drive link" /><Sel name="platform" label="For" opts={["Instagram", "Facebook", "GMB", "LinkedIn", "Print"]} /></div></>);
     case "test": return (<>{mod}<Inp name="title" label="What was tested" required /><div className="g3"><Inp name="pass" label="Cases passed" type="number" min="0" required /><Inp name="fail" label="Cases failed" type="number" min="0" defaultValue="0" required /><Inp name="url" label="Test sheet link" /></div></>);
     case "bug": return (<>
@@ -336,7 +349,10 @@ function SendBox() {
   return <label className="row sub" style={{ marginBottom: 14 }}><input type="checkbox" name={`${px}send`} defaultChecked /> Sent to the client for approval</label>;
 }
 
-const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month"];
+// design and video work: a link or an attached file is needed
+const DESIGN_T = ["logo", "vcard", "brochure", "corpvideo", "instavideo", "motion"];
+
+const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month", "kind", "len", "qty"];
 
 export function LogWork() {
   const P = usePortal();
@@ -376,7 +392,7 @@ export function LogWork() {
     const titles = fd.getAll(`${px}title`).map(t => String(t).trim()).filter(Boolean);
     d.title = titles[0] || "";
     const meta = {};
-    META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt", "pages", "posts", "kws"].includes(k) ? +d[k] : d[k]; });
+    META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt", "pages", "posts", "kws", "len", "qty"].includes(k) ? +d[k] : d[k]; });
     if (meta.month) meta.month = new Date(`${meta.month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
     if (type === "bug" && d.assign) meta.assignName = devs.find(x => x.id === d.assign)?.name || "";
     if (type === "screen" || type === "revision") meta.send = !!d.send;
@@ -393,7 +409,7 @@ export function LogWork() {
     // title or link: one of the two is enough
     if (["blog", "gmb", "onpage", "webcontent", "blogcontent", "landing"].includes(type) && !titles.length && !urls.length) return { err: type === "gmb" ? "Fill the post headline or the post link" : "Fill the title or the link" };
     // work that needs proof: a link, or a screenshot or video
-    if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) return { err: "Add the link, or attach a screenshot or video" };
+    if (["blog", "poster", ...DESIGN_T].includes(type) && !String(d.url || "").trim() && !proof.length) return { err: "Add the link, or attach a screenshot or video" };
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
     let items;
     if (type === "backlink") {
@@ -485,7 +501,7 @@ export function LogWork() {
                     )}
                     <Fields type={type} devs={devs} />
                     {type !== "bug" && (
-                      <div className="f"><label>Screenshots, video or files {["blog", "poster"].includes(type) ? "(or add the link above)" : "(optional)"}</label>
+                      <div className="f"><label>Screenshots, video or files {["blog", "poster", ...DESIGN_T].includes(type) ? "(or add the link above)" : "(optional)"}</label>
                         <FilePick id={`lw-proof-${b.id}`} files={b.proof} onChange={(f) => setProof(b.id, f)} hint="No link? Paste a screenshot (Ctrl+V), drop a screen recording, or attach the file." /></div>
                     )}
                     <div className="f" style={{ maxWidth: 320 }}><label htmlFor={`i-w${b.id}_hh`}>Time spent{type === "backlink" ? " (for all these links)" : ""}</label>

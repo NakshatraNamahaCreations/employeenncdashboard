@@ -944,3 +944,17 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 
 /* Log work: title or link, one is enough */
 .lw-one { display: block; margin: -8px 0 14px; font-size: 12.5px; }
+
+/* My projects: click a number to see what was added */
+.mc-click { font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.mc-click:hover { border-color: #BFD3FE; box-shadow: 0 2px 8px rgba(37, 99, 235, .08); }
+.mc-click:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+.mc-see { font-size: 11.5px; color: var(--pri); font-weight: 500; }
+.dl { max-height: 62vh; overflow-y: auto; min-width: min(560px, 80vw); }
+.dl-day { margin-bottom: 12px; }
+.dl-h { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--mut); padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.dl-i { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid #F1F5F9; }
+.dl-t { display: grid; gap: 2px; min-width: 0; }
+.dl-t b { font-weight: 500; color: var(--navy); font-size: 14px; overflow-wrap: anywhere; }
+.dl-t small { color: var(--mut); font-size: 12px; }
+.dl-t a { font-size: 12.5px; color: var(--pri); display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }

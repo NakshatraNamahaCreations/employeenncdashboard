@@ -7,6 +7,7 @@ export const ROLES = {
   seox: { l: "SEO expert",        dept: "Digital Marketing",  c: "#0E7490", pick: "clients",  page: ["ranks", "Keyword positions"] },
   ads:  { l: "Google Ads expert", dept: "Digital Marketing",  c: "#D97706", pick: "clients",  page: ["ads", "Daily ads report"] },
   gfx:  { l: "Graphic designer",  dept: "Design",             c: "#DB2777", pick: "clients",  page: ["designs", "My designs"] },
+  vid:  { l: "Video editor",      dept: "Design",             c: "#9333EA", pick: "clients",  page: ["designs", "My designs"] },
   app:  { l: "App developer",     dept: "Development",        c: "#2563EB", pick: "projects", page: ["bugs", "My bugs"] },
   web:  { l: "Website developer", dept: "Development",        c: "#0D9488", pick: "projects", page: ["bugs", "My bugs"] },
   back: { l: "Backend developer", dept: "Development",        c: "#4F46E5", pick: "projects", page: ["bugs", "My bugs"] },
@@ -24,7 +25,7 @@ const ALL = Object.keys(ROLES);
 // The groups the work types are shown in on Log work
 export const GROUPS = [
   ["seo", "SEO and content"], ["gads", "Google Ads"], ["meta", "Meta Ads and social media"], ["rep", "Reports and tracking"],
-  ["dev", "Development"], ["design", "Design"], ["test", "Testing"], ["acc", "Accounts"], ["gen", "Meetings and other work"],
+  ["dev", "Development"], ["design", "Design"], ["video", "Video editing"], ["test", "Testing"], ["acc", "Accounts"], ["gen", "Meetings and other work"],
 ];
 
 // c: true = logged against a client (SEO side); otherwise against a project. g: the group it is shown in.
@@ -46,7 +47,7 @@ export const TY = {
   negative:    { g: "gads", l: "Negative keywords",    h: "Terms blocked to stop wasted spend",         r: DM, c: true },
   // Meta Ads and social media
   metaads:     { g: "meta", l: "Meta Ads",             h: "Facebook and Instagram campaign set up or changed", r: DM, c: true },
-  social:      { g: "meta", l: "Social media posts",   h: "Posts created, scheduled or published",      r: [...DM, "gfx"], c: true },
+  social:      { g: "meta", l: "Social media posts",   h: "Posts created, scheduled or published",      r: [...DM, "gfx", "vid"], c: true },
   // Reports and tracking
   position:    { g: "rep", l: "Position tracking",     h: "Keyword ranks checked and recorded",         r: DM, c: true },
   monthly:     { g: "rep", l: "Monthly report",        h: "The client's report for the month",          r: DM, c: true },
@@ -60,7 +61,14 @@ export const TY = {
   // Design
   screen:   { g: "design", l: "Screens designed",    h: "Figma link",                               r: ["ux"] },
   revision: { g: "design", l: "Design revision",     h: "Changes the client asked for",             r: ["ux"] },
-  poster:   { g: "design", l: "Poster or creative",  h: "For SEO and social clients",               r: ["gfx", "ux"], c: true },
+  logo:     { g: "design", l: "Logo design",         h: "Concepts, revisions or final files",       r: ["gfx"], c: true },
+  vcard:    { g: "design", l: "Visiting card",       h: "Business card design",                     r: ["gfx"], c: true },
+  brochure: { g: "design", l: "Brochure design",     h: "Print or digital brochure",                r: ["gfx"], c: true },
+  poster:   { g: "design", l: "Poster design",       h: "Social, GMB or print poster",              r: ["gfx", "ux"], c: true },
+  // Video editing
+  corpvideo:  { g: "video", l: "Corporate video",    h: "Company, office or event video edited",    r: ["vid"], c: true },
+  instavideo: { g: "video", l: "Instagram ad video", h: "Reel, story or ad video edited",           r: ["vid"], c: true },
+  motion:     { g: "video", l: "Motion graphics or explainer video", h: "Animated or explainer video", r: ["vid"], c: true },
   // Testing
   test:     { g: "test", l: "Test run",            h: "Cases passed and failed",                  r: ["test"] },
   bug:      { g: "test", l: "Raise a bug",         h: "Assign it to a developer",                 r: ["test"] },
@@ -106,6 +114,7 @@ export function metaTxt(e) {
   if (m.pages) out.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) out.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) out.push(`${m.kws} keywords`); if (m.month) out.push(m.month);
   if (m.tools) out.push(m.tools);
+  if (m.kind) out.push(m.kind); if (m.len) out.push(`${m.len} sec`); if (m.qty) out.push(`${m.qty} design${m.qty > 1 ? "s" : ""}`);
   if (m.files?.length) out.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return out.join(" · ");
 }

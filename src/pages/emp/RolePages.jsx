@@ -377,14 +377,14 @@ Nakshatra Namaha Creations`);
 function Designs() {
   const P = usePortal();
   const [fbFor, setFbFor] = useState(null);
-  const D = P.entries.filter(e => ["screen", "revision", "poster"].includes(e.type));
+  const D = P.entries.filter(e => ["screen", "revision", "poster", "logo", "vcard", "brochure", "corpvideo", "instavideo", "motion"].includes(e.type));
   const st = (e) => e.meta?.status || "";
   const setStatus = (id, status, fb) => P.run(() => api(`/designs/${id}`, { method: "PATCH", body: { status, fb } }), status === "approved" ? "Marked approved" : "Changes noted");
   const ms = monthStart();
   return (
     <>
       <h2 className="t">My designs<span>.</span></h2>
-      <p className="lead">Screens and creatives you sent to clients. Update each one when the client approves or asks for changes.</p>
+      <p className="lead">Screens, designs and videos you sent to clients. Update each one when the client approves or asks for changes.</p>
       <div className="kpis">
         <div className="kpi"><span className="l">Changes asked</span><span className="v" style={{ color: "var(--amb)" }}>{D.filter(e => st(e) === "changes").length}</span></div>
         <div className="kpi"><span className="l">With client</span><span className="v">{D.filter(e => st(e) === "review").length}</span></div>

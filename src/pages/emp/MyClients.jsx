@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, Globe, CalendarDays, PlusCircle, ChevronDown } from "lucide-react";
+import { Mail, Globe, CalendarDays, PlusCircle, ChevronDown, ExternalLink } from "lucide-react";
+import Modal from "../../Modal";
 import { initials } from "../../roles";
 import { api } from "../../api";
 import { toast } from "../../toast";
-import { fd } from "../../util";
+import { fd, fdw } from "../../util";
 
 // My projects (SEO and ads): every client the admin gave me in SEO & Ads Team, one row each with
 // this month's numbers. Clicking a row opens the details: contact, targets, keywords, team and actions.
@@ -14,15 +15,48 @@ const inr = (n) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
 
 // One target as a small tile: done of target with a thin bar
-function Tile({ label, done, target, note, fmt = (n) => n }) {
+function Tile({ label, done, target, note, fmt = (n) => n, onOpen }) {
   const ok = target > 0 && done >= target;
   return (
-    <div className={`mc-tile ${ok ? "ok" : ""}`}>
+    <button type="button" className={`mc-tile mc-click ${ok ? "ok" : ""}`} onClick={onOpen} title="See what was added">
       <span className="mc-tl">{label}</span>
       <b>{fmt(done)}<small> / {fmt(target)}</small></b>
       <div className="mc-track"><i className={ok ? "ok" : ""} style={{ width: `${pct(done, target)}%` }} /></div>
       {note && <span className="mc-tn">{note}</span>}
-    </div>
+      <span className="mc-see">See details</span>
+    </button>
+  );
+}
+
+const DONE_T = { backlink: "Backlinks", gmb: "GMB posts", blog: "Blogs", poster: "Posters", ads: "Ads reports" };
+const link = (u) => (/^https?:/.test(u) ? u : `https://${u}`);
+
+// The entries behind one number: this month, newest first, each with its link
+function DoneList({ c, type, onClose }) {
+  const [L, setL] = useState(null);
+  useEffect(() => { api(`/my-clients/${c.id}/done?type=${type}`).then(j => setL(j.data), e => { toast(e.message); setL([]); }); }, [c.id, type]);
+  const days = [...new Set((L || []).map(x => x.date))];
+  return (
+    <Modal title={`${DONE_T[type]} this month · ${c.name}`} onClose={onClose}>
+      {L == null ? <div className="empty">Loading…</div> : !L.length ? <div className="empty">Nothing added this month yet.</div> : (
+        <div className="dl">
+          <p className="sub" style={{ margin: "0 0 10px" }}>{L.length} {type === "ads" ? "report" : "entr"}{type === "ads" ? (L.length > 1 ? "s" : "") : (L.length > 1 ? "ies" : "y")} this month, newest first.</p>
+          {days.map(dt => (
+            <div key={dt} className="dl-day">
+              <div className="dl-h">{fdw(dt)} <span>{L.filter(x => x.date === dt).length}</span></div>
+              {L.filter(x => x.date === dt).map(x => type === "ads" ? (
+                <div key={x.id} className="dl-i"><span className="dl-t"><b>{inr(x.spend)} spent</b><small>{[x.campaign, `${x.impr} impressions`, `${x.clicks} clicks`, `${x.conv} leads`].filter(Boolean).join(" · ")}</small></span>
+                  <span className={`pill ${x.sent ? "p-ok" : "p-blue"}`}>{x.sent ? "Sent" : "Saved"}</span></div>
+              ) : (
+                <div key={x.id} className="dl-i"><span className="dl-t"><b>{x.title || x.url || "Untitled"}</b>
+                  <small>{[x.by && `by ${x.by}`, x.kw && `keyword: ${x.kw}`, x.platform].filter(Boolean).join(" · ")}</small>
+                  {x.url && <a href={link(x.url)} target="_blank" rel="noopener noreferrer" title={x.url}><ExternalLink size={12} /> {x.url.replace(/^https?:\/\//, "")}</a>}</span></div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
 // The same number, small, in the row
@@ -40,6 +74,7 @@ export default function MyClients() {
   const [L, setL] = useState(null);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState("");
+  const [see, setSee] = useState(null);   // { c, type }: the list behind a number
   useEffect(() => { api("/my-clients").then(j => setL(j.data), e => { toast(e.message); setL([]); }); }, []);
   const shown = (L || []).filter(c => !q || `${c.name} ${c.contact} ${c.site}`.toLowerCase().includes(q.toLowerCase()));
   const hr = new Date().getHours();
@@ -84,11 +119,11 @@ export default function MyClients() {
                       </div>
                       {(seo || des || (ads && c.ads)) && (
                         <div className="mc-tiles">
-                          {seo && <Tile label="Backlinks this month" done={d.backlinkMonth} target={t.backlink} note={d.backlinkToday ? `${d.backlinkToday} today` : ""} />}
-                          {seo && <Tile label="GMB posts this month" done={d.gmbMonth} target={t.gmb} />}
-                          {seo && <Tile label="Blogs this month" done={d.blogMonth} target={t.blog} />}
-                          {des && <Tile label="Posters this month" done={d.posterMonth} target={t.poster} />}
-                          {ads && c.ads && <Tile label="Ads spend this month" done={Math.round(c.ads.spendMonth || 0)} target={c.budget || 0} fmt={inr} note={`${c.ads.leadsMonth} leads · ${c.ads.days} reports`} />}
+                          {seo && <Tile label="Backlinks this month" done={d.backlinkMonth} target={t.backlink} note={d.backlinkToday ? `${d.backlinkToday} today` : ""} onOpen={() => setSee({ c, type: "backlink" })} />}
+                          {seo && <Tile label="GMB posts this month" done={d.gmbMonth} target={t.gmb} onOpen={() => setSee({ c, type: "gmb" })} />}
+                          {seo && <Tile label="Blogs this month" done={d.blogMonth} target={t.blog} onOpen={() => setSee({ c, type: "blog" })} />}
+                          {des && <Tile label="Posters this month" done={d.posterMonth} target={t.poster} onOpen={() => setSee({ c, type: "poster" })} />}
+                          {ads && c.ads && <Tile label="Ads spend this month" done={Math.round(c.ads.spendMonth || 0)} target={c.budget || 0} fmt={inr} note={`${c.ads.leadsMonth} leads · ${c.ads.days} reports`} onOpen={() => setSee({ c, type: "ads" })} />}
                         </div>
                       )}
                       <div className="mc-lines">
@@ -115,6 +150,7 @@ export default function MyClients() {
             })}
           </section>
         )}
+      {see && <DoneList c={see.c} type={see.type} onClose={() => setSee(null)} />}
     </>
   );
 }
