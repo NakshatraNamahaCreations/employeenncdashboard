@@ -5,7 +5,8 @@ import Modal from "../../Modal";
 import { initials } from "../../roles";
 import { api } from "../../api";
 import { toast } from "../../toast";
-import { fd, fdw } from "../../util";
+import { fd } from "../../util";
+import { downloadCsv } from "../../csv";
 
 // My projects (SEO and ads): every client the admin gave me in SEO & Ads Team, one row each with
 // this month's numbers. Clicking a row opens the details: contact, targets, keywords, team and actions.
@@ -31,29 +32,32 @@ function Tile({ label, done, target, note, fmt = (n) => n, onOpen }) {
 const DONE_T = { backlink: "Backlinks", gmb: "GMB posts", blog: "Blogs", poster: "Posters", ads: "Ads reports" };
 const link = (u) => (/^https?:/.test(u) ? u : `https://${u}`);
 
-// The entries behind one number: this month, newest first, each with its link
+// The entries behind one number: this month, newest first, as a table with export
 function DoneList({ c, type, onClose }) {
   const [L, setL] = useState(null);
   useEffect(() => { api(`/my-clients/${c.id}/done?type=${type}`).then(j => setL(j.data), e => { toast(e.message); setL([]); }); }, [c.id, type]);
-  const days = [...new Set((L || []).map(x => x.date))];
+  const ads = type === "ads";
+  const exportCsv = () => {
+    const head = ads ? ["Sl no", "Date", "Campaign", "Cost", "Impressions", "Clicks", "Leads", "Sent"] : ["Sl no", "Date", "Title", "Keyword", "Added by", "Link"];
+    const rows = L.map((x, i) => ads ? [i + 1, x.date, x.campaign, x.spend, x.impr, x.clicks, x.conv, x.sent ? "Yes" : "No"] : [i + 1, x.date, x.title, x.kw, x.by, x.url ? link(x.url) : ""]);
+    downloadCsv(`${DONE_T[type].replace(/\s+/g, "-")}_${c.name.replace(/[^a-z0-9]+/gi, "-")}.csv`, [head, ...rows]);
+  };
   return (
     <Modal title={`${DONE_T[type]} this month · ${c.name}`} onClose={onClose}>
       {L == null ? <div className="empty">Loading…</div> : !L.length ? <div className="empty">Nothing added this month yet.</div> : (
         <div className="dl">
-          <p className="sub" style={{ margin: "0 0 10px" }}>{L.length} {type === "ads" ? "report" : "entr"}{type === "ads" ? (L.length > 1 ? "s" : "") : (L.length > 1 ? "ies" : "y")} this month, newest first.</p>
-          {days.map(dt => (
-            <div key={dt} className="dl-day">
-              <div className="dl-h">{fdw(dt)} <span>{L.filter(x => x.date === dt).length}</span></div>
-              {L.filter(x => x.date === dt).map(x => type === "ads" ? (
-                <div key={x.id} className="dl-i"><span className="dl-t"><b>{inr(x.spend)} spent</b><small>{[x.campaign, `${x.impr} impressions`, `${x.clicks} clicks`, `${x.conv} leads`].filter(Boolean).join(" · ")}</small></span>
-                  <span className={`pill ${x.sent ? "p-ok" : "p-blue"}`}>{x.sent ? "Sent" : "Saved"}</span></div>
-              ) : (
-                <div key={x.id} className="dl-i"><span className="dl-t"><b>{x.title || x.url || "Untitled"}</b>
-                  <small>{[x.by && `by ${x.by}`, x.kw && `keyword: ${x.kw}`, x.platform].filter(Boolean).join(" · ")}</small>
-                  {x.url && <a href={link(x.url)} target="_blank" rel="noopener noreferrer" title={x.url}><ExternalLink size={12} /> {x.url.replace(/^https?:\/\//, "")}</a>}</span></div>
-              ))}
-            </div>
-          ))}
+          <div className="dl-bar"><span className="sub">{L.length} this month, newest first</span><button type="button" className="btn sm" onClick={exportCsv}>Export</button></div>
+          <div className="dl-tw"><table className="dl-t">
+            <thead>{ads ? <tr><th>#</th><th>Date</th><th>Campaign</th><th className="r">Cost</th><th className="r">Clicks</th><th className="r">Leads</th><th>Status</th></tr>
+              : <tr><th>#</th><th>Date</th><th>Title</th><th>Keyword</th><th>By</th><th>Link</th></tr>}</thead>
+            <tbody>{L.map((x, i) => ads ? (
+              <tr key={x.id}><td className="dl-n">{i + 1}</td><td className="dl-d">{fd(x.date)}</td><td>{x.campaign || "-"}</td><td className="r"><b>{inr(x.spend)}</b></td><td className="r">{x.clicks}</td><td className="r">{x.conv}</td>
+                <td><span className={`pill ${x.sent ? "p-ok" : "p-blue"}`}>{x.sent ? "Sent" : "Saved"}</span></td></tr>
+            ) : (
+              <tr key={x.id}><td className="dl-n">{i + 1}</td><td className="dl-d">{fd(x.date)}</td><td className="dl-ti">{x.title || "-"}</td><td>{x.kw || "-"}</td><td>{x.by || "-"}</td>
+                <td>{x.url ? <a href={link(x.url)} target="_blank" rel="noopener noreferrer" title={x.url}><ExternalLink size={13} /> Open</a> : "-"}</td></tr>
+            ))}</tbody>
+          </table></div>
         </div>
       )}
     </Modal>
@@ -93,11 +97,11 @@ export default function MyClients() {
               const t = c.targets, d = c.done, seo = c.myJobs.includes("seo"), ads = c.myJobs.includes("ads"), des = c.myJobs.includes("design");
               const on = open === c.id;
               return (
-                <div key={c.id} className={`ml-item ${on ? "on" : ""}`}>
+                <div key={c.id} className={`ml-item ${on ? "on" : ""} ${c.active === false ? "off" : ""}`}>
                   <button type="button" className="ml-row" onClick={() => setOpen(on ? "" : c.id)} aria-expanded={on}>
                     <span className="ml-n">{i + 1}</span>
                     <span className="ml-name"><b title={c.name}>{c.name}</b>
-                      <span className="ml-jobs">{c.myJobs.map(j => <span key={j} className={`pill ${JOB[j][1]}`}>{JOB[j][0]}</span>)}</span></span>
+                      <span className="ml-jobs">{c.active === false && <span className="pill p-grey">Inactive</span>}{c.myJobs.map(j => <span key={j} className={`pill ${JOB[j][1]}`}>{JOB[j][0]}</span>)}</span></span>
                     <span className="ml-stats">
                       {seo && <Stat label="Backlinks" done={d.backlinkMonth} target={t.backlink} />}
                       {seo && <Stat label="GMB" done={d.gmbMonth} target={t.gmb} />}
@@ -105,7 +109,7 @@ export default function MyClients() {
                       {des && <Stat label="Posters" done={d.posterMonth} target={t.poster} />}
                       {ads && c.ads && <Stat label="Ads spend" done={Math.round(c.ads.spendMonth || 0)} target={c.budget || 0} fmt={inr} />}
                     </span>
-                    <span className="ml-st">{ads && c.ads ? <AdsPill c={c} hr={hr} /> : null}</span>
+                    <span className="ml-st">{c.active === false ? <span className="pill p-grey">Inactive</span> : ads && c.ads ? <AdsPill c={c} hr={hr} /> : null}</span>
                     <ChevronDown size={18} className="ml-chev" />
                   </button>
 

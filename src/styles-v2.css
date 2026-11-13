@@ -958,3 +958,18 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .dl-t b { font-weight: 500; color: var(--navy); font-size: 14px; overflow-wrap: anywhere; }
 .dl-t small { color: var(--mut); font-size: 12px; }
 .dl-t a { font-size: 12.5px; color: var(--pri); display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+
+/* My projects: the list behind a number, as a table */
+.dl { min-width: 0; max-height: none; overflow: visible; width: min(760px, 86vw); }
+.dl-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.dl-tw { max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.dl-t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dl-t th { position: sticky; top: 0; background: #F8FAFC; text-align: left; font-size: 12px; color: var(--mut); font-weight: 600; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.dl-t td { padding: 9px 10px; border-bottom: 1px solid #F1F5F9; vertical-align: top; color: var(--navy); }
+.dl-t tr:last-child td { border-bottom: 0; }
+.dl-t .r { text-align: right; }
+.dl-t .dl-n { color: var(--mut); width: 28px; }
+.dl-t .dl-d { white-space: nowrap; }
+.dl-t .dl-ti { min-width: 200px; }
+.dl-t a { color: var(--pri); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ml-item.off .ml-name b, .ml-item.off .ml-stats { opacity: .55; }
