@@ -11,7 +11,8 @@ import { api, fileUrl } from "../../api";
 import { toast } from "../../toast";
 import { EntryLi } from "./EmpPages";
 import Modal from "../../Modal";
-import { today, fd, fdw, greet, rs, monthStart, iso } from "../../util";
+import { today, fd, fdw, greet, rs, monthStart, iso, T } from "../../util";
+import { downloadCsv } from "../../csv";
 
 export function RolePage() {
   const { rolePage } = useParams();
@@ -139,6 +140,56 @@ function parseTerms(txt) {
 }
 const wasted = (terms, spend) => terms.filter(t => t.conv === 0 && t.cost >= Math.max(150, spend * 0.05));
 
+// Every saved report (Google and Meta), by day, with filters and an Excel export
+function SavedAds({ clients, reload }) {
+  const [from, setFrom] = useState(T(-29)), [to, setTo] = useState(today());
+  const [cid, setCid] = useState(""), [pl, setPl] = useState("");
+  const [L, setL] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api(`/ads/all?from=${from}&to=${to}`).then(j => live && setL(j.data.list), e => { if (live) { toast(e.message); setL([]); } });
+    return () => { live = false; };
+  }, [from, to, reload]);
+  const hasG = (r) => !r.meta || r.spend || r.clicks || r.impr || r.conv;
+  const ctrOf = (m) => (m.ctr != null ? +m.ctr : m.impr ? (m.clicks / m.impr) * 100 : 0);
+  const cpcOf = (m) => (m.cpc != null ? +m.cpc : m.clicks ? m.spend / m.clicks : 0);
+  const rows = (L || []).flatMap(r => [
+    ...(hasG(r) ? [{ k: `${r._id}g`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Google Ads", m: r, sent: r.sent }] : []),
+    ...(r.meta ? [{ k: `${r._id}m`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Meta Ads", m: r.meta, sent: r.metaSent }] : []),
+  ]).filter(x => (!cid || x.cid === cid) && (!pl || x.pl === pl));
+  const exportCsv = () => {
+    const out = [["Date", "Client", "Platform", "Campaign", "Impressions", "Clicks", "CTR %", "Cost (Rs)", "CPC (Rs)", "Conversions", "Cost per conversion (Rs)", "Sent to client"]];
+    rows.forEach(x => out.push([x.date, x.client, x.pl, x.m.campaign || "", x.m.impr || 0, x.m.clicks || 0, ctrOf(x.m).toFixed(2), x.m.spend || 0, cpcOf(x.m).toFixed(2), x.m.conv || 0, x.m.conv ? (x.m.spend / x.m.conv).toFixed(2) : "", x.sent ? "Yes" : "No"]));
+    downloadCsv(`ads-reports_${from}_to_${to}.csv`, out);
+  };
+  return (
+    <section className="card"><h3>Saved reports <small>{rows.length}</small></h3>
+      <div className="ar-bar">
+        <label className="md-date">From <input type="date" value={from} max={to} onChange={e => e.target.value && setFrom(e.target.value)} /></label>
+        <label className="md-date">To <input type="date" value={to} min={from} max={today()} onChange={e => e.target.value && setTo(e.target.value)} /></label>
+        <select value={cid} onChange={e => setCid(e.target.value)} aria-label="Client"><option value="">All clients</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select value={pl} onChange={e => setPl(e.target.value)} aria-label="Platform"><option value="">Google and Meta</option><option>Google Ads</option><option>Meta Ads</option></select>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="btn" disabled={!rows.length} onClick={exportCsv}>Export</button>
+      </div>
+      {L == null ? <div className="empty">Loading…</div> : !rows.length ? <div className="empty">No reports saved for these dates.</div> : (
+        <div className="ar-tw"><table>
+          <thead><tr><th>Date</th><th>Client</th><th>Platform</th><th>Campaign</th><th style={{ textAlign: "right" }}>Impressions</th><th style={{ textAlign: "right" }}>Clicks</th><th style={{ textAlign: "right" }}>CTR</th><th style={{ textAlign: "right" }}>Cost</th><th style={{ textAlign: "right" }}>CPC</th><th style={{ textAlign: "right" }}>Conversions</th><th>Sent</th></tr></thead>
+          <tbody>{rows.map(x => (
+            <tr key={x.k}>
+              <td>{fdw(x.date)}</td><td>{x.client}</td><td><span className={`pill ${x.pl === "Meta Ads" ? "p-blue" : "p-amb"}`}>{x.pl}</span></td><td>{x.m.campaign || "-"}</td>
+              <td style={{ textAlign: "right" }}>{(x.m.impr || 0).toLocaleString("en-IN")}</td><td style={{ textAlign: "right" }}>{(x.m.clicks || 0).toLocaleString("en-IN")}</td>
+              <td style={{ textAlign: "right" }}>{ctrOf(x.m).toFixed(2)}%</td><td style={{ textAlign: "right" }}><b>{rs(x.m.spend || 0)}</b></td><td style={{ textAlign: "right" }}>{rs(cpcOf(x.m))}</td>
+              <td style={{ textAlign: "right" }}><b>{x.m.conv || 0}</b></td>
+              <td>{x.sent ? <span className="pill p-ok">Sent</span> : <span className="pill p-amb">Not sent</span>}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </section>
+  );
+}
+
 function AdsReport() {
   const P = usePortal();
   const C = P.assigned.clients;
@@ -148,6 +199,8 @@ function AdsReport() {
   const H = useGet(client ? `/ads?client=${client}` : "");
   const [f, setF] = useState({ contact: "", campaign: "", spend: "", clicks: "", impr: "", ctr: "", cpc: "", conv: "" });
   const [plat, setPlat] = useState("google");   // google | meta
+  const [fileKey, setFileKey] = useState(0);     // clears the chosen file after a save
+  const [rn, setRn] = useState(0);               // reloads the saved reports after a save
   const [day, setDay] = useState(today());       // the day the numbers are for (yesterday's report can be sent today)
   const [terms, setTerms] = useState("");
   const [msg, setMsg] = useState("");
@@ -194,8 +247,10 @@ ${top.length ? `\nTop search terms:\n${top.map((t, i) => `${i + 1}. ${t.t}: ${t.
 Regards,
 ${P.session.user.name}, ${PL} team
 Nakshatra Namaha Creations`);
-      toast("Saved to the CRM. Check the message and send it.");
-      H.reload(); P.refresh();
+      toast("Saved. Check the message and send it.");
+      setF(s => ({ contact: s.contact, campaign: "", spend: "", clicks: "", impr: "", ctr: "", cpc: "", conv: "" }));
+      setTerms(""); setFileKey(k => k + 1);
+      H.reload(); setRn(n => n + 1); P.refresh();
     } catch (ex) { toast(ex.message); }
     finally { setBusy(false); }
   };
@@ -234,7 +289,7 @@ Nakshatra Namaha Creations`);
                 <div className="f"><label htmlFor="av">Conversions</label><input id="av" type="number" min="0" value={f.conv} onChange={set("conv")} /></div>
               </div>
               {plat === "google" && <>
-              <div className="f"><label htmlFor="tf">Search terms report (optional): upload the CSV from Google Ads</label><input id="tf" type="file" accept=".csv,.txt,.tsv" onChange={e => onFile(e.target.files[0])} /></div>
+              <div className="f"><label htmlFor="tf">Search terms report (optional): upload the CSV from Google Ads</label><input key={fileKey} id="tf" type="file" accept=".csv,.txt,.tsv" onChange={e => onFile(e.target.files[0])} /></div>
               <div className="f"><label htmlFor="tt">or paste it here (search term, clicks, cost, conversions)</label>
                 <textarea id="tt" rows={5} value={terms} onChange={e => setTerms(e.target.value)} placeholder={"Search term, Clicks, Cost, Conversions\ncar ceramic coating, 22, 410, 2"} /></div>
               </>}
@@ -246,14 +301,6 @@ Nakshatra Namaha Creations`);
               )}
               <button className="btn p lg" disabled={busy}>{busy ? "Saving…" : "Save and write client message"}</button>
             </form>
-          </section>
-          <section className="card"><h3>Recent reports <small>{cl?.name}</small></h3>
-            {H.loading ? <div className="empty">Loading…</div> : (H.data || []).length ? H.data.map(r => (
-              <div key={r._id} className="li"><div className="x"><b>{fdw(r.date)}</b>
-                {(r.spend || r.clicks || r.impr || r.terms?.length > 0 || !r.meta) && <span className="sub">Google Ads{r.campaign ? ` · ${r.campaign}` : ""} · {rs(r.spend)} · {r.clicks} clicks · {r.conv} conversions {r.sent ? "· sent" : "· not sent"}</span>}
-                {r.meta && <span className="sub">Meta Ads{r.meta.campaign ? ` · ${r.meta.campaign}` : ""} · {rs(r.meta.spend)} · {r.meta.clicks} clicks · {r.meta.conv} conversions {r.metaSent ? "· sent" : "· not sent"}</span>}</div>
-                {(r.sent || !(r.spend || r.clicks || r.impr)) && (!r.meta || r.metaSent) ? <span className="pill p-ok">Sent</span> : <span className="pill p-amb">Not sent</span>}</div>
-            )) : <div className="empty">No reports for this client yet.</div>}
           </section>
         </div>
         <section className="card"><h3>Message for the client</h3>
@@ -271,6 +318,7 @@ Nakshatra Namaha Creations`);
           </div>
         </section>
       </div>
+      <SavedAds clients={C} reload={rn} />
     </>
   );
 }

@@ -1,5 +1,7 @@
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Send, Inbox, SendHorizontal, Plus, Search, Check, Paperclip, MessageSquare, FolderOpen, Film, CheckCircle2 } from "lucide-react";
+import { FileText, Send, Inbox, SendHorizontal, Plus, Search, Check, Paperclip, MessageSquare, FolderOpen, Film, CheckCircle2, Upload, Download, Trash2, Archive } from "lucide-react";
+import { downloadCsv } from "../../csv";
+import { confirmBox } from "../../confirm";
 import { usePortal } from "../../auth/store";
 import { api, fileUrl } from "../../api";
 import { ROLES, hasRole, initials } from "../../roles";
@@ -66,7 +68,7 @@ export default function Documents() {
     } catch (e) { toast(e.message); return false; }
   };
   const openDoc = (d) => { setOpen(d._id); if (!d.mine && !d.seenAt) act(d, { action: "seen" }); };
-  const TABS = [["received", "Received", Inbox, rec.length], ["sent", "Sent", SendHorizontal, sent.length], ["new", "Send documents", Plus, null]];
+  const TABS = [["received", "Received", Inbox, rec.length], ["sent", "Sent", SendHorizontal, sent.length], ["mine", "My documents", Archive, null], ["new", "Send documents", Plus, null]];
 
   return (
     <>
@@ -87,10 +89,10 @@ export default function Documents() {
             </button>
           ))}
         </div>
-        {tab !== "new" && <label className="dc-search"><Search size={15} /><input type="search" placeholder="Search title, project or person" value={q} onChange={e => setQ(e.target.value)} aria-label="Search documents" /></label>}
+        {!["new", "mine"].includes(tab) && <label className="dc-search"><Search size={15} /><input type="search" placeholder="Search title, project or person" value={q} onChange={e => setQ(e.target.value)} aria-label="Search documents" /></label>}
       </div>
 
-      {tab === "new" ? <SendForm people={people} me={me} assigned={P.assigned} onSent={() => { load(); setTab("sent"); }} /> : (
+      {tab === "mine" ? <MyDocs assigned={P.assigned} /> : tab === "new" ? <SendForm people={people} me={me} assigned={P.assigned} onSent={() => { load(); setTab("sent"); }} /> : (
         <div className="dc-split">
           <section className="card dc-list">
             <div className="dc-list-h">{tab === "sent" ? "Sent by you" : "Sent to you"} <small>{list.length}</small></div>
@@ -237,5 +239,94 @@ function Thread({ d, act, me, roleOf }) {
         <div className="dc-reply-f"><button className="btn p" disabled={busy || (!text.trim() && !files.length)}><Send size={15} /> {busy ? "Sending…" : "Send reply"}</button></div>
       </form>
     </section>
+  );
+}
+
+/* ───────── My documents: files I keep, with a date. Import (upload), find by date, export ───────── */
+const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const fdate = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+function MyDocs({ assigned }) {
+  const [L, setL] = useState(null);
+  const [from, setFrom] = useState(""), [to, setTo] = useState("");
+  const [q, setQ] = useState("");
+  const [f, setF] = useState({ title: "", date: todayStr(), refName: "", note: "" });
+  const [files, setFiles] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    const p = new URLSearchParams(); if (from) p.set("from", from); if (to) p.set("to", to);
+    api(`/my-docs?${p}`).then(j => setL(j.data), e => { toast(e.message); setL([]); });
+  }, [from, to]);
+  useEffect(() => { queueMicrotask(load); }, [load]);
+  const refs = [...(assigned?.clients || []), ...(assigned?.projects || [])].map(x => x.name);
+  const shown = (L || []).filter(d => !q || `${d.title} ${d.refName} ${d.note} ${d.files.map(x => x.name).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!files.length && !f.note.trim()) { toast("Import a file, or write a note"); return; }
+    setBusy(true);
+    try {
+      await api("/my-docs", { method: "POST", body: { ...f, files } });
+      toast("Saved to My documents");
+      setF(s => ({ title: "", date: s.date, refName: s.refName, note: "" })); setFiles([]); load();
+    } catch (ex) { toast(ex.message); }
+    finally { setBusy(false); }
+  };
+  const remove = async (d) => {
+    if (!(await confirmBox({ title: "Delete this document?", text: `"${d.title}" is removed from My documents.`, ok: "Delete", danger: true }))) return;
+    try { await api(`/my-docs/${d._id}`, { method: "DELETE" }); setL(x => x.filter(y => y._id !== d._id)); toast("Deleted"); } catch (ex) { toast(ex.message); }
+  };
+  const exportCsv = () => {
+    const rows = [["Date", "Title", "Project / client", "Note", "Files", "Links", "Saved at"]];
+    shown.forEach(d => rows.push([d.date, d.title, d.refName, d.note, d.files.map(x => x.name).join(" | "), d.files.map(x => fileUrl(x.url)).join(" | "), new Date(d.createdAt).toLocaleString("en-IN")]));
+    downloadCsv(`my-documents${from || to ? `_${from || "start"}_to_${to || "today"}` : ""}.csv`, rows);
+  };
+  // grouped by day
+  const days = [...new Set(shown.map(d => d.date))];
+
+  return (
+    <div className="md-grid">
+      <section className="card md-form"><h3><Upload size={16} /> Import documents</h3>
+        <form className="pad" onSubmit={save}>
+          <div className="f"><label>Files</label>
+            <FilePick id="md-files" files={files} onChange={setFiles} hint="Drop files, paste a screenshot (Ctrl+V), or browse. Videos up to 100 MB." /></div>
+          <div className="g2">
+            <div className="f"><label htmlFor="md-d">Date</label><input id="md-d" type="date" value={f.date} max={todayStr()} onChange={set("date")} required /></div>
+            <div className="f"><label htmlFor="md-r">Project or client (optional)</label>
+              <input id="md-r" list="md-refs" value={f.refName} onChange={set("refName")} placeholder="Pick or type" />
+              <datalist id="md-refs">{refs.map(r => <option key={r} value={r} />)}</datalist></div>
+          </div>
+          <div className="f"><label htmlFor="md-t">Title (optional)</label><input id="md-t" value={f.title} onChange={set("title")} placeholder="Uses the file name if left empty" /></div>
+          <div className="f"><label htmlFor="md-n">Note (optional)</label><textarea id="md-n" rows={2} value={f.note} onChange={set("note")} /></div>
+          <button type="submit" className="btn p lg" style={{ width: "100%", justifyContent: "center" }} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+        </form>
+      </section>
+
+      <section className="card md-list">
+        <div className="md-bar">
+          <label className="md-date">From <input type="date" value={from} max={to || todayStr()} onChange={e => setFrom(e.target.value)} /></label>
+          <label className="md-date">To <input type="date" value={to} min={from || undefined} max={todayStr()} onChange={e => setTo(e.target.value)} /></label>
+          {(from || to) && <button type="button" className="btn sm" onClick={() => { setFrom(""); setTo(""); }}>All dates</button>}
+          <label className="dc-search md-q"><Search size={15} /><input type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} aria-label="Search my documents" /></label>
+          <button type="button" className="btn" disabled={!shown.length} onClick={exportCsv} title="Download the list as an Excel (CSV) file"><Download size={15} /> Export</button>
+        </div>
+        {L == null ? <div className="empty">Loading…</div> : !shown.length ? (
+          <div className="dc-empty"><span><Archive size={26} /></span><b>{q || from || to ? "Nothing for this search or dates" : "No documents yet"}</b><small>Import files on the left. They are saved with the date you pick.</small></div>
+        ) : days.map(day => (
+          <div key={day} className="md-day">
+            <div className="md-day-h">{fdate(day)} <small>{shown.filter(d => d.date === day).length}</small></div>
+            {shown.filter(d => d.date === day).map(d => (
+              <div key={d._id} className="md-item">
+                <div className="md-it-h"><b>{d.title}</b>{d.refName && <span className="dc-chip">{d.refName}</span>}
+                  <button type="button" className="btn sm md-del" onClick={() => remove(d)} aria-label={`Delete ${d.title}`}><Trash2 size={13} /></button></div>
+                {d.note && <p className="md-note"><Linkify text={d.note} /></p>}
+                <FileGrid files={d.files} />
+                {d.files.length > 0 && <div className="md-dl">{d.files.map(x => <a key={x.url} href={fileUrl(x.url)} download={x.name} target="_blank" rel="noopener noreferrer"><Download size={12} /> {x.name}</a>)}</div>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </section>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { usePortal } from "./auth/store";
+import { isMobileDevice } from "./device";
 import { Login, Signup, ForceChange } from "./pages/auth/AuthPages";
 import { EmpLayout } from "./layout/Shell";
 import { MyDay, LogWork, MyTasks, MyHistory, Profile } from "./pages/emp/EmpPages";
@@ -16,8 +17,24 @@ const MyClients = lazy(() => import("./pages/emp/MyClients"));
 const TeamPlans = lazy(() => import("./pages/emp/TeamPlans"));
 const Wait = ({ children }) => <Suspense fallback={<div className="empty">Loading…</div>}>{children}</Suspense>;
 
+// Phones and tablets: the portal is only for computers
+function OnlyComputer() {
+  return (
+    <div className="nomob">
+      <div className="nomob-card">
+        <img src="/nnclogo.png" alt="NNC" />
+        <h1>Please use a computer</h1>
+        <p>The NNC Employee Portal works only on a laptop or desktop computer. Signing in from a mobile phone or tablet is not allowed, including with "Desktop site" turned on.</p>
+        <p className="nomob-s">Open <b>employee.nakshatranamahacreations.com</b> on your office computer to sign in.</p>
+      </div>
+    </div>
+  );
+}
+const MOBILE = isMobileDevice();
+
 export default function App() {
   const { session } = usePortal();
+  if (MOBILE) return <OnlyComputer />;
 
   // Only employees sign in here; admins approve and review in the NNC CRM (Employee Portal module)
   if (!session || session.type !== "emp") {

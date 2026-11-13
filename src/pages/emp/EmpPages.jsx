@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES, TY, typesFor, metaTxt, roleInfo, rolesOf, hasRole } from "../../roles";
@@ -10,7 +10,7 @@ import Modal from "../../Modal";
 import PwInput from "../../PwInput";
 import DevDay from "./DevDay";
 import TodayPlan from "./TodayPlan";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { DayPanel, TypeTiles, TodaySheet, Tips } from "./LogParts";
 import { TY_IC } from "./workIcons";
 import { today, T, fd, fdw, h1, pct, weekStart, monthStart, greet, parse, iso, DOW, ampm } from "../../util";
@@ -185,21 +185,30 @@ export function Blocked({ refs, onClose, onSubmit }) {
 }
 
 /* ───────── Log work ───────── */
-const Inp = ({ name, label, type = "text", ...rest }) => (
-  <div className="f"><label htmlFor={`i-${name}`}>{label}</label>
-    {type === "password" ? <PwInput id={`i-${name}`} name={name} {...rest} /> : <input id={`i-${name}`} name={name} type={type} {...rest} />}</div>
-);
-const Sel = ({ name, label, opts, ...rest }) => (
-  <div className="f"><label htmlFor={`i-${name}`}>{label}</label>
-    <select id={`i-${name}`} name={name} {...rest}>{opts.map(o => (Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>))}</select></div>
-);
-const Area = ({ name, label, ...rest }) => (
-  <div className="f"><label htmlFor={`i-${name}`}>{label}</label><textarea id={`i-${name}`} name={name} {...rest} /></div>
-);
+const Pfx = createContext("");
+function Inp({ name, label, type = "text", ...rest }) {
+  const n = useContext(Pfx) + name;
+  return (
+    <div className="f"><label htmlFor={`i-${n}`}>{label}</label>
+      {type === "password" ? <PwInput id={`i-${n}`} name={n} {...rest} /> : <input id={`i-${n}`} name={n} type={type} {...rest} />}</div>
+  );
+}
+function Sel({ name, label, opts, ...rest }) {
+  const n = useContext(Pfx) + name;
+  return (
+    <div className="f"><label htmlFor={`i-${n}`}>{label}</label>
+      <select id={`i-${n}`} name={n} {...rest}>{opts.map(o => (Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>))}</select></div>
+  );
+}
+function Area({ name, label, ...rest }) {
+  const n = useContext(Pfx) + name;
+  return <div className="f"><label htmlFor={`i-${n}`}>{label}</label><textarea id={`i-${n}`} name={n} {...rest} /></div>;
+}
 
 // GSC / GA4 / GTM setup: pick what was set up, with a link for each
 const TRACK = [["gsc", "Google Search Console", "https://search.google.com/search-console?resource_id=…"], ["ga4", "Google Analytics 4", "https://analytics.google.com/analytics/web/#/p…"], ["gtm", "Google Tag Manager", "https://tagmanager.google.com/#/container/…"]];
 function TrackingFields() {
+  const px = useContext(Pfx);
   const [on, setOn] = useState(["gsc"]);
   const flip = (k) => setOn(L => (L.includes(k) ? L.filter(x => x !== k) : [...L, k]));
   return (
@@ -208,7 +217,7 @@ function TrackingFields() {
         <div className="lw-pick">
           {TRACK.map(([k, l]) => (
             <label key={k} className={`lw-chk${on.includes(k) ? " on" : ""}`}>
-              <input type="checkbox" name="tools" value={k} checked={on.includes(k)} onChange={() => flip(k)} />
+              <input type="checkbox" name={`${px}tools`} value={k} checked={on.includes(k)} onChange={() => flip(k)} />
               <b>{k.toUpperCase()}</b><small>{l}</small>
             </label>
           ))}
@@ -241,7 +250,7 @@ function Fields({ type, devs }) {
     case "screen": case "revision": return (<>
       {mod}<Inp name="title" label={type === "screen" ? "Screens designed" : "What was revised"} required />
       <div className="g2"><Inp name="url" label="Figma link" /><Inp name="screens" label="Number of screens" type="number" min="1" defaultValue="1" /></div>
-      <label className="row sub" style={{ marginBottom: 14 }}><input type="checkbox" name="send" defaultChecked /> Sent to the client for approval</label>
+      <SendBox />
     </>);
     case "poster": return (<><Inp name="title" label="What was designed" required placeholder="Diwali offer post" /><div className="g2"><Inp name="url" label="Image or Drive link" /><Sel name="platform" label="For" opts={["Instagram", "Facebook", "GMB", "LinkedIn", "Print"]} /></div></>);
     case "test": return (<>{mod}<Inp name="title" label="What was tested" required /><div className="g3"><Inp name="pass" label="Cases passed" type="number" min="0" required /><Inp name="fail" label="Cases failed" type="number" min="0" defaultValue="0" required /><Inp name="url" label="Test sheet link" /></div></>);
@@ -283,6 +292,11 @@ function Fields({ type, devs }) {
   }
 }
 
+function SendBox() {
+  const px = useContext(Pfx);
+  return <label className="row sub" style={{ marginBottom: 14 }}><input type="checkbox" name={`${px}send`} defaultChecked /> Sent to the client for approval</label>;
+}
+
 const META_KEYS = ["kw", "da", "words", "camp", "platform", "screens", "ver", "pass", "fail", "sev", "assign", "steps", "amt", "mod", "terms", "gtype", "pages", "posts", "kws", "month"];
 
 export function LogWork() {
@@ -292,24 +306,27 @@ export function LogWork() {
   const [devs, setDevs] = useState([]);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [proof, setProof] = useState([]);            // screenshots, videos or files for this entry
+  const [blocks, setBlocks] = useState([{ id: 1, proof: [] }]);   // each piece of work, with its own screenshots or files
+  const addBlock = () => setBlocks(L => [...L, { id: Math.max(...L.map(b => b.id)) + 1, proof: [] }]);
+  // FilePick passes either the new list or a function of the old one
+  const setProof = (id, files) => setBlocks(L => L.map(b => (b.id === id ? { ...b, proof: typeof files === "function" ? files(b.proof) : files } : b)));
   const nav = useNavigate();
   const locked = P.days.some(d => d.date === today());
   const todayL = P.entries.filter(e => e.date === today());
   const pickType = (k) => {
     if (TY[k].go) { nav(TY[k].go); return; }
     if (k === "bug") api("/developers").then(j => setDevs(j.data)).catch(() => setDevs([]));
-    setProof([]);
+    setBlocks([{ id: 1, proof: [] }]);
     setType(k);
   };
   const onClients = !!TY[type]?.c && picks.has("clients");
   const refs = onClients ? P.assigned.clients.map(c => ["client", c]) : P.assigned.projects.map(p => ["project", p]);
   const both = ["meeting", "other"].includes(type) ? [...P.assigned.clients.map(c => ["client", c]), ...P.assigned.projects.map(p => ["project", p])] : refs;
 
-  const submit = async (e) => {
-    e.preventDefault();
-    const d = Object.fromEntries(new FormData(e.target));
-    const [refType, refId] = String(d.ref || "").split(":");
+  // one piece of work (fields named with the block's prefix) → { items, hrs } or an error message
+  const build = (fd, px, proof) => {
+    const d = {};
+    for (const [k, v] of fd.entries()) if (k.startsWith(px)) d[k.slice(px.length)] = v;
     const meta = {};
     META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt", "pages", "posts", "kws"].includes(k) ? +d[k] : d[k]; });
     if (meta.month) meta.month = new Date(`${meta.month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -317,8 +334,8 @@ export function LogWork() {
     if (type === "screen" || type === "revision") meta.send = !!d.send;
     if (proof.length) meta.files = proof;
     if (type === "tracking") {
-      const tools = new FormData(e.target).getAll("tools");
-      if (!tools.length) { toast("Tick at least one: GSC, GA4 or GTM"); return; }
+      const tools = fd.getAll(`${px}tools`);
+      if (!tools.length) return { err: "Tick at least one: GSC, GA4 or GTM" };
       meta.tools = tools.map(t => t.toUpperCase()).join(", ");
       const links = tools.map(t => ({ l: t.toUpperCase(), url: String(d[`link_${t}`] || "").trim() })).filter(x => x.url).map(x => ({ ...x, url: /^https?:/.test(x.url) ? x.url : `https://${x.url}` }));
       if (links.length) meta.links = links;
@@ -326,7 +343,7 @@ export function LogWork() {
       d.title = `${meta.tools} setup: ${d.title}`;
     }
     // work that needs proof: a link, or a screenshot or video
-    if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) { toast("Add the link, or attach a screenshot or video"); return; }
+    if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) return { err: "Add the link, or attach a screenshot or video" };
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
     let items;
     if (type === "backlink") {
@@ -336,12 +353,29 @@ export function LogWork() {
       items = [{ title, url: url(d.url), meta }];
     }
     const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;
-    if (hrs <= 0) { toast("Enter the time spent, in hours and minutes"); return; }
+    if (hrs <= 0) return { err: "Enter the time spent, in hours and minutes" };
+    return { items, hrs: Math.round(hrs * 100) / 100 };
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const [refType, refId] = String(fd.get("ref") || "").split(":");
+    const date = fd.get("date") || today();
+    const W = blocks.map((b, i) => ({ i, ...build(fd, `w${b.id}_`, b.proof) }));
+    const bad = W.find(w => w.err);
+    if (bad) { toast(W.length > 1 ? `Work ${bad.i + 1}: ${bad.err}` : bad.err); return; }
     setBusy(true);
-    const r = await P.addWork({ type, date: d.date, refType: refType || "", refId: refId || "", hrs: Math.round(hrs * 100) / 100, items },
-      type === "backlink" ? `${items.length} backlink${items.length > 1 ? "s" : ""} saved` : type === "bug" ? "Bug sent to the developer" : `${TY[type].l} saved`);
-    setBusy(false);
-    if (r) { setType(""); setProof([]); }
+    let saved = 0;
+    try {
+      for (const w of W) { await api("/work", { method: "POST", body: { type, date, refType: refType || "", refId: refId || "", hrs: w.hrs, items: w.items } }); saved++; }
+      const n = W.reduce((a, w) => a + w.items.length, 0);
+      toast(type === "backlink" ? `${n} backlink${n > 1 ? "s" : ""} saved` : type === "bug" ? (saved > 1 ? `${saved} bugs sent to the developers` : "Bug sent to the developer") : saved > 1 ? `${saved} pieces of work saved` : `${TY[type].l} saved`);
+      setType(""); setBlocks([{ id: 1, proof: [] }]);
+    } catch (ex) {
+      toast(saved ? `${saved} saved. Work ${saved + 1}: ${ex.message}` : ex.message);
+      if (saved) setBlocks(L => L.slice(saved));   // keep only the ones not saved yet
+    } finally { setBusy(false); P.refresh(); }
   };
 
   const hToday = hoursOn(P.entries, today());
@@ -391,23 +425,31 @@ export function LogWork() {
               <div className="lw-sec"><span className="lw-n">1</span><b>Where</b></div>
               <Sel name="ref" label={onClients ? "Client" : ["meeting", "other"].includes(type) ? "Client or project" : "Project"} required={!optional}
                 opts={[...(optional ? [["", "Internal / none"]] : []), ...both.map(([k, x]) => [`${k}:${x.id}`, x.name])]} />
-              <div className="lw-sec"><span className="lw-n">2</span><b>What you did</b></div>
-              <Fields type={type} devs={devs} />
-              {type !== "bug" && (
-                <div className="f"><label>Screenshots, video or files {["blog", "poster"].includes(type) ? "(or add the link above)" : "(optional)"}</label>
-                  <FilePick id="lw-proof" files={proof} onChange={setProof} hint="No link? Paste a screenshot (Ctrl+V), drop a screen recording, or attach the file." /></div>
-              )}
-              <div className="lw-sec"><span className="lw-n">3</span><b>Time</b></div>
-              <div className="g2">
-                <div className="f"><label htmlFor="i-hh">Time spent</label>
-                  <div className="lw-time">
-                    <input id="i-hh" name="hh" type="number" min="0" max="16" step="1" defaultValue={Math.floor(hrsDef)} aria-label="Hours" /><span>h</span>
-                    <select name="mm" defaultValue={Math.round((hrsDef % 1) * 60)} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{m}</option>)}</select><span>min</span>
-                  </div></div>
-                <Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} />
-              </div>
-              {type === "backlink" && <p className="sub">Time is for all the links together.</p>}
-              <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : locked ? "Save as extra work" : "Save to timesheet"}</button></div>
+              <div className="lw-sec"><span className="lw-n">2</span><b>What you did</b>{blocks.length > 1 && <small className="sub" style={{ display: "inline", marginLeft: 6 }}>{blocks.length} pieces of work</small>}</div>
+              {blocks.map((b, i) => (
+                <Pfx.Provider key={b.id} value={`w${b.id}_`}>
+                  <div className={blocks.length > 1 ? "lw-block" : ""}>
+                    {blocks.length > 1 && (
+                      <div className="lw-block-h"><b>Work {i + 1}</b>
+                        <button type="button" className="btn sm" onClick={() => setBlocks(L => L.filter(x => x.id !== b.id))} aria-label={`Remove work ${i + 1}`}><X size={13} /> Remove</button></div>
+                    )}
+                    <Fields type={type} devs={devs} />
+                    {type !== "bug" && (
+                      <div className="f"><label>Screenshots, video or files {["blog", "poster"].includes(type) ? "(or add the link above)" : "(optional)"}</label>
+                        <FilePick id={`lw-proof-${b.id}`} files={b.proof} onChange={(f) => setProof(b.id, f)} hint="No link? Paste a screenshot (Ctrl+V), drop a screen recording, or attach the file." /></div>
+                    )}
+                    <div className="f" style={{ maxWidth: 320 }}><label htmlFor={`i-w${b.id}_hh`}>Time spent{type === "backlink" ? " (for all these links)" : ""}</label>
+                      <div className="lw-time">
+                        <input id={`i-w${b.id}_hh`} name={`w${b.id}_hh`} type="number" min="0" max="16" step="1" defaultValue={Math.floor(hrsDef)} aria-label="Hours" /><span>h</span>
+                        <select name={`w${b.id}_mm`} defaultValue={Math.round((hrsDef % 1) * 60)} aria-label="Minutes">{Array.from({ length: 12 }, (_, k) => k * 5).map(m => <option key={m} value={m}>{m}</option>)}</select><span>min</span>
+                      </div></div>
+                  </div>
+                </Pfx.Provider>
+              ))}
+              <button type="button" className="lw-addmore" onClick={addBlock} disabled={blocks.length >= 15}><Plus size={16} /> Add another {type === "bug" ? "bug" : "piece of work"} {both.length ? "for the same " + (onClients ? "client" : "project") : ""}</button>
+              <div className="lw-sec"><span className="lw-n">3</span><b>Date</b></div>
+              <div className="g2"><Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} /></div>
+              <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : `${locked ? "Save as extra work" : "Save to timesheet"}${blocks.length > 1 ? ` (${blocks.length})` : ""}`}</button></div>
             </form>
           )}
         </section>

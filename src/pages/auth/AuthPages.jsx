@@ -1,3 +1,4 @@
+import { isMobileDevice } from "../../device";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
@@ -40,7 +41,7 @@ export function Login() {
     const f = new FormData(e.target), id = String(f.get("uid")).trim(), pw = String(f.get("pw")), rem = !!f.get("rem");
     setErr(""); setBusy(true);
     try {
-      const j = await api("/login", { method: "POST", body: { id, password: pw }, token: "" });
+      const j = await api("/login", { method: "POST", body: { id, password: pw, mobile: isMobileDevice() }, token: "" });
       signIn({ type: "emp", token: j.data.token, user: j.data.user }, rem);
       toast(`Welcome, ${j.data.user.name}`);
       nav("/");
@@ -116,7 +117,7 @@ export function Signup() {
     if (!/\d/.test(f.get("pw"))) { setErr("Add at least one number to your password."); return; }
     setErr(""); setBusy(true);
     try {
-      const j = await api("/signup", { method: "POST", body: { ...d, password: f.get("pw") }, token: "" });
+      const j = await api("/signup", { method: "POST", body: { ...d, password: f.get("pw"), mobile: isMobileDevice() }, token: "" });
       if (j.pending) { setPending(true); return; }
       signIn({ type: "emp", token: j.data.token, user: j.data.user });
       toast(`Account created. Welcome to NNC, ${j.data.user.name}!`);
