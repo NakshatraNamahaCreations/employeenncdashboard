@@ -276,9 +276,9 @@ function Fields({ type, devs }) {
       <Area name="urls" label="Backlink URLs, one per line" rows={5} required placeholder="https://medium.com/@nnc/destination-wedding-guide" />
       <div className="g3"><Inp name="kw" label="Keyword targeted" /><Sel name="btype" label="Type" opts={["Guest post", "Directory listing", "Business profile", "Article submission", "Social bookmark", "Image submission", "Press release"]} /><Inp name="da" label="Domain authority (DA)" type="number" min="0" max="100" placeholder="45" /></div>
     </>);
-    case "blog": return (<><Inp name="title" label="Blog title" required /><Inp name="url" label="Live blog link" type="url" placeholder="https://" /><div className="g2"><Inp name="kw" label="Keyword targeted" /><Inp name="words" label="Word count" type="number" min="100" placeholder="1200" /></div></>);
-    case "gmb": return (<><Inp name="title" label="Post headline" required /><Inp name="url" label="Post link" placeholder="g.page/..." /><div className="g2"><Sel name="gtype" label="Post type" opts={["Update", "Offer", "Event", "Photo"]} /><Inp name="kw" label="Keyword" /></div></>);
-    case "onpage": return (<><Inp name="title" label="What was changed" required placeholder="Meta titles updated on 6 service pages" /><Inp name="url" label="Page link" /></>);
+    case "blog": return (<><Inp name="title" label="Blog title" /><Inp name="url" label="Live blog link" type="url" placeholder="https://" /><span className="sub lw-one">Fill the title or the link. One is enough.</span><Inp name="kw" label="Keyword targeted" /></>);
+    case "gmb": return (<><Inp name="title" label="Post headline" /><Inp name="url" label="Post link" placeholder="g.page/..." /><span className="sub lw-one">Fill the headline or the link. One is enough.</span><div className="g2"><Sel name="gtype" label="Post type" opts={["Update", "Offer", "Event", "Photo"]} /><Inp name="kw" label="Keyword" /></div></>);
+    case "onpage": return (<><Inp name="title" label="What was changed" placeholder="Meta titles updated on 6 service pages" /><Inp name="url" label="Page link" /><span className="sub lw-one">Fill the change or the link. One is enough.</span></>);
     case "optimise": case "newad": return (<><Inp name="camp" label="Campaign" required /><Inp name="title" label={type === "newad" ? "What was added" : "What did you change"} required placeholder={type === "newad" ? "2 new responsive search ads in Implants ad group" : "Raised budget to ₹1,500, paused 3 low-CTR ads"} /></>);
     case "negative": return (<><Inp name="camp" label="Campaign" required /><Area name="terms" label="Negative keywords added" required placeholder="free, jobs, salary" /></>);
     case "feature": case "page": case "deploy": case "build": case "bugfix": return (<>
@@ -299,15 +299,15 @@ function Fields({ type, devs }) {
         <Sel name="assign" label="Assign to" required opts={[["", devs.length ? "Choose a developer" : "No developers have an account yet"], ...devs.map(d => [d.id, `${d.name} · ${ROLES[d.role]?.l || ""}`])]} /></div>
       <Area name="steps" label="Steps to reproduce" rows={3} /><Inp name="url" label="Video or screenshot link (optional)" />
     </>);
-    case "webcontent": return (<><Inp name="title" label="Pages or sections written" required placeholder="Home, About and Services pages" />
-      <Inp name="url" label="Document or page link" placeholder="Google Doc or website link" />
-      <div className="g3"><Inp name="pages" label="Pages" type="number" min="1" defaultValue="1" /><Inp name="words" label="Word count" type="number" min="0" /><Inp name="kw" label="Main keyword" /></div></>);
-    case "blogcontent": return (<><Inp name="title" label="Blog title" required />
-      <Inp name="url" label="Document link" placeholder="Google Doc link" />
-      <div className="g2"><Inp name="kw" label="Keyword targeted" /><Inp name="words" label="Word count" type="number" min="100" placeholder="1200" /></div></>);
-    case "landing": return (<><Inp name="title" label="Landing page" required placeholder="Diwali offer page, Ads campaign" />
-      <Inp name="url" label="Document or page link" />
-      <div className="g2"><Inp name="kw" label="Main keyword or offer" /><Inp name="words" label="Word count" type="number" min="0" /></div></>);
+    case "webcontent": return (<><Inp name="title" label="Pages or sections written" placeholder="Home, About and Services pages" />
+      <Inp name="url" label="Document or page link" placeholder="Google Doc or website link" /><span className="sub lw-one">Fill the pages or the link. One is enough.</span>
+      <div className="g2"><Inp name="pages" label="Pages" type="number" min="1" defaultValue="1" /><Inp name="kw" label="Main keyword" /></div></>);
+    case "blogcontent": return (<><Inp name="title" label="Blog title" />
+      <Inp name="url" label="Document link" placeholder="Google Doc link" /><span className="sub lw-one">Fill the title or the link. One is enough.</span>
+      <Inp name="kw" label="Keyword targeted" /></>);
+    case "landing": return (<><Inp name="title" label="Landing page" placeholder="Diwali offer page, Ads campaign" />
+      <Inp name="url" label="Document or page link" /><span className="sub lw-one">Fill the page name or the link. One is enough.</span>
+      <Inp name="kw" label="Main keyword or offer" /></>);
     case "campaign": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="Campaign type" opts={["Google Ads · Search", "Google Ads · Performance Max", "Google Ads · Display", "Google Ads · YouTube", "Google Ads · Demand Gen", "Google Ads · Shopping", "Google Ads · Call"]} /></div>
       <Inp name="title" label="What was set up" required placeholder="3 ad groups, 12 ads, call and sitelink extensions" />
       <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="kw" label="Main keywords or audience" /></div>
@@ -390,6 +390,8 @@ export function LogWork() {
       if (links.length) meta.links = links;
       d.url = links[0]?.url || "";
     }
+    // title or link: one of the two is enough
+    if (["blog", "gmb", "onpage", "webcontent", "blogcontent", "landing"].includes(type) && !titles.length && !urls.length) return { err: type === "gmb" ? "Fill the post headline or the post link" : "Fill the title or the link" };
     // work that needs proof: a link, or a screenshot or video
     if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) return { err: "Add the link, or attach a screenshot or video" };
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
@@ -397,7 +399,7 @@ export function LogWork() {
     if (type === "backlink") {
       items = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean).map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u), meta }));
     } else {
-      const name = (t) => (type === "gmb" ? `${d.gtype} post: ${t}` : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${t}` : type === "tracking" ? `${meta.tools} setup: ${t}` : t);
+      const name = (t) => (type === "gmb" ? (t ? `${d.gtype} post: ${t}` : `${d.gtype} post`) : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${t}` : type === "tracking" ? `${meta.tools} setup: ${t}` : t);
       items = type === "negative" ? [{ title: "Added negative keywords", url: url(d.url), meta }] : (titles.length ? titles : [""]).map(t => ({ title: name(t), url: url(d.url), meta }));
     }
     const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;

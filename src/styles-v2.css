@@ -941,3 +941,6 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .lw-bx { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--mut); display: grid; place-items: center; cursor: pointer; }
 .lw-bx:hover { background: var(--redBg); color: var(--red); border-color: #FECACA; }
 .lw-btot { background: #F1F5F9; border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--navy); margin: -8px 0 16px; }
+
+/* Log work: title or link, one is enough */
+.lw-one { display: block; margin: -8px 0 14px; font-size: 12.5px; }
