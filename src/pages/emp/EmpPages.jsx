@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { ROLES, TY, typesFor, metaTxt, roleInfo, rolesOf, hasRole } from "../../roles";
@@ -572,9 +572,60 @@ export function LogWork() {
 }
 
 /* ───────── My tasks ───────── */
+// Testers and team leads: give a task to a developer and follow it
+const TST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["Done", "p-ok"] };
+function GiveTasks() {
+  const P = usePortal();
+  const [devs, setDevs] = useState([]), [L, setL] = useState(null), [busy, setBusy] = useState(false), [n, setN] = useState(0);
+  useEffect(() => { api("/developers").then(j => setDevs(j.data), () => setDevs([])); }, []);
+  useEffect(() => { api("/tasks/given").then(j => setL(j.data), e => { toast(e.message); setL([]); }); }, [n]);
+  const give = async (e) => {
+    e.preventDefault();
+    const form = e.target, d = Object.fromEntries(new FormData(form));
+    setBusy(true);
+    try {
+      await api("/tasks/give", { method: "POST", body: { account: d.dev, title: d.gtitle.trim(), due: d.gdue, refId: d.gref || "" } });
+      toast(`Task sent to ${devs.find(x => x.id === d.dev)?.name || "the developer"}`);
+      form.reset(); setN(x => x + 1);
+    } catch (ex) { toast(ex.message); } finally { setBusy(false); }
+  };
+  const takeBack = async (t) => {
+    if (!(await confirmBox({ title: "Take back this task?", text: `${t.title} · ${t.to}`, ok: "Take back" }))) return;
+    try { await api(`/tasks/given/${t._id}`, { method: "DELETE" }); toast("Task taken back"); setN(x => x + 1); } catch (ex) { toast(ex.message); }
+  };
+  const open = (L || []).filter(t => t.status !== "done");
+  return (
+    <div className="grid2" style={{ marginTop: 16 }}>
+      <section className="card"><h3>Give a task to a developer</h3>
+        <form className="pad" onSubmit={give}>
+          <div className="f"><label htmlFor="g-dev">Developer</label>
+            <select id="g-dev" name="dev" required defaultValue=""><option value="" disabled>{devs.length ? "Choose a developer" : "No developers yet"}</option>{devs.map(d => <option key={d.id} value={d.id}>{d.name} · {ROLES[d.role]?.l || ""}</option>)}</select></div>
+          <div className="f"><label htmlFor="g-ref">Project</label>
+            <select id="g-ref" name="gref" defaultValue=""><option value="">Internal / none</option>{P.assigned.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          <div className="f"><label htmlFor="g-t">Task</label><textarea id="g-t" name="gtitle" rows={3} required placeholder="Fix the checkout total when a coupon is applied, then send it for testing" /></div>
+          <div className="f" style={{ maxWidth: 240 }}><label htmlFor="g-due">Due</label><input id="g-due" name="gdue" type="date" required defaultValue={today()} min={today()} /></div>
+          <button className="btn p" disabled={busy}>{busy ? "Sending…" : "Give task"}</button>
+        </form></section>
+      <section className="card"><h3>Tasks I gave <small className="sub">{open.length} open</small></h3>
+        {L == null ? <div className="empty">Loading…</div> : L.length ? L.map(t => {
+          const late = t.status !== "done" && t.due < today();
+          return (
+            <div key={t._id} className="li gv-li">
+              <div className="x"><b>{t.title}</b><span className="sub">{[`to ${t.to}`, t.refName, `due ${fd(t.due)}`, t.doneOn ? `done ${fd(t.doneOn)}` : ""].filter(Boolean).join(" · ")}</span></div>
+              <span className={`pill ${late ? "p-red" : TST[t.status]?.[1]}`}>{late ? "Overdue" : TST[t.status]?.[0]}</span>
+              {t.status !== "done" && <button type="button" className="btn sm" onClick={() => takeBack(t)} title="Take back this task">Take back</button>}
+            </div>
+          );
+        }) : <div className="empty">You have not given any tasks yet.</div>}
+      </section>
+    </div>
+  );
+}
+
 export function MyTasks() {
   const P = usePortal();
   const [tf, setTf] = useState("open");
+  const canGive = hasRole(P.session.user, ["test"]) || !!P.session.user?.planLead;
   const open = P.tasks.filter(t => t.status !== "done");
   const L = P.tasks.filter(t => (tf === "open" ? t.status !== "done" : t.status === "done"));
   const refs = [...P.assigned.clients, ...P.assigned.projects];
@@ -587,7 +638,7 @@ export function MyTasks() {
   return (
     <>
       <h2 className="t">My tasks<span>.</span></h2>
-      <p className="lead">Tasks Harish assigns to you, and your own to-dos.</p>
+      <p className="lead">Tasks given to you, and your own to-dos.{canGive ? " As a tester you can also give tasks to developers below." : ""}</p>
       <div className="chips">
         <button type="button" className={`chip ${tf === "open" ? "on" : ""}`} onClick={() => setTf("open")}>Open ({open.length})</button>
         <button type="button" className={`chip ${tf === "done" ? "on" : ""}`} onClick={() => setTf("done")}>Done</button>
@@ -603,6 +654,7 @@ export function MyTasks() {
             <button className="btn p">Add task</button>
           </form></section>
       </div>
+      {canGive && <GiveTasks />}
     </>
   );
 }

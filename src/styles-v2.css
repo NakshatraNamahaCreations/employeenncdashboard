@@ -975,3 +975,9 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .dl-tab .dl-ti { font-weight: 500; }
 .dl-tab a { color: var(--pri); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-weight: 500; }
 .ml-item.off .ml-name b, .ml-item.off .ml-stats { opacity: .55; }
+
+/* My tasks: tasks I gave to developers */
+.gv-li { display: flex; align-items: flex-start; gap: 10px; }
+.gv-li .x { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.gv-li .x b { font-weight: 500; overflow-wrap: anywhere; }
+.gv-li .pill { white-space: nowrap; }
