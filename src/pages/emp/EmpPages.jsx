@@ -347,6 +347,7 @@ export function LogWork() {
   const [submitting, setSubmitting] = useState(false);
   const [blocks, setBlocks] = useState([{ id: 1, proof: [] }]);   // each piece of work, with its own screenshots or files
   // FilePick passes either the new list or a function of the old one
+  const addBlock = () => setBlocks(L => [...L, { id: Math.max(...L.map(b => b.id)) + 1, proof: [] }]);
   const setProof = (id, files) => setBlocks(L => L.map(b => (b.id === id ? { ...b, proof: typeof files === "function" ? files(b.proof) : files } : b)));
   const nav = useNavigate();
   const locked = P.days.some(d => d.date === today());
@@ -475,10 +476,10 @@ export function LogWork() {
               <div className="lw-sec"><span className="lw-n">2</span><b>What you did</b>{blocks.length > 1 && <small className="sub" style={{ display: "inline", marginLeft: 6 }}>{blocks.length} pieces of work</small>}</div>
               {blocks.map((b, i) => (
                 <Pfx.Provider key={b.id} value={`w${b.id}_`}>
-                  <div className={blocks.length > 1 ? "lw-block" : ""}>
+                  <div className="lw-block">
                     {blocks.length > 1 && (
-                      <div className="lw-block-h"><b>Work {i + 1}</b>
-                        <button type="button" className="btn sm" onClick={() => setBlocks(L => L.filter(x => x.id !== b.id))} aria-label={`Remove work ${i + 1}`}><X size={13} /> Remove</button></div>
+                      <div className="lw-block-h"><b>{TY[type].l} {i + 1}</b>
+                        <button type="button" className="lw-bx" onClick={() => setBlocks(L => L.filter(x => x.id !== b.id))} aria-label={`Remove ${TY[type].l} ${i + 1}`} title="Remove"><X size={16} /></button></div>
                     )}
                     <Fields type={type} devs={devs} />
                     {type !== "bug" && (
@@ -493,6 +494,8 @@ export function LogWork() {
                   </div>
                 </Pfx.Provider>
               ))}
+              <button type="button" className="lw-addmore" onClick={addBlock} disabled={blocks.length >= 20}><Plus size={16} /> Add another {String(TY[type].l).toLowerCase()}</button>
+              {blocks.length > 1 && <div className="lw-btot">{blocks.length} × {TY[type].l}. Each one is saved as its own entry and counts on its own.</div>}
               <div className="lw-sec"><span className="lw-n">3</span><b>Date</b></div>
               <div className="g2"><Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} /></div>
               <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : `${locked ? "Save as extra work" : "Save to timesheet"}${blocks.length > 1 ? ` (${blocks.length})` : ""}`}</button></div>

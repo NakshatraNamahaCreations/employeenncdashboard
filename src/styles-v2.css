@@ -935,3 +935,9 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .ar-pn { font-size: 13px; color: var(--navy); }
 @media (max-width: 1100px) { .ar-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .ar-bar { grid-template-columns: 1fr 1fr; } }
+
+/* Log work: each piece of work in its own box, like the ads campaigns */
+.lw-block { padding: 14px 16px 4px; }
+.lw-bx { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--mut); display: grid; place-items: center; cursor: pointer; }
+.lw-bx:hover { background: var(--redBg); color: var(--red); border-color: #FECACA; }
+.lw-btot { background: #F1F5F9; border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--navy); margin: -8px 0 16px; }
