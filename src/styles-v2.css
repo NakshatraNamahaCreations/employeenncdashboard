@@ -917,3 +917,21 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .lw-multi button { border: 1.5px solid var(--line); background: #fff; color: var(--navy); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13.5px; cursor: pointer; }
 .lw-multi button:hover { border-color: #BFD3FE; }
 .lw-multi button.on { background: var(--priBg); border-color: var(--pri); color: var(--pri); font-weight: 600; }
+
+/* Saved ads reports: filters in one row, totals, pages */
+.ar-bar { display: grid; grid-template-columns: 150px 150px minmax(160px, 1.2fr) 160px minmax(160px, 1fr) auto; gap: 10px; align-items: end; padding: 14px 16px; }
+.ar-f { display: grid; gap: 4px; min-width: 0; }
+.ar-f > span { font-size: 12px; color: var(--mut); font-weight: 500; }
+.ar-f input, .ar-f select { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; font-size: 13.5px; background: #fff; color: var(--navy); min-width: 0; }
+.ar-exp { height: 40px; white-space: nowrap; }
+.ar-sum { display: flex; flex-wrap: wrap; gap: 8px 26px; padding: 10px 16px; background: #F8FAFC; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ar-sum span { display: grid; }
+.ar-sum small { font-size: 11.5px; color: var(--mut); }
+.ar-sum b { color: var(--navy); font-size: 15px; }
+.ar-camp { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.ar-pg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--line); }
+.ar-per { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mut); }
+.ar-per select { height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; font: inherit; }
+.ar-pn { font-size: 13px; color: var(--navy); }
+@media (max-width: 1100px) { .ar-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .ar-bar { grid-template-columns: 1fr 1fr; } }

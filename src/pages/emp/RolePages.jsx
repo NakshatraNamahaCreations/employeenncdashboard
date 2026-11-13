@@ -143,7 +143,8 @@ const wasted = (terms, spend) => terms.filter(t => t.conv === 0 && t.cost >= Mat
 // Every saved report (Google and Meta), by day, with filters and an Excel export
 function SavedAds({ clients, reload }) {
   const [from, setFrom] = useState(T(-29)), [to, setTo] = useState(today());
-  const [cid, setCid] = useState(""), [pl, setPl] = useState("");
+  const [cid, setCid] = useState(""), [pl, setPl] = useState(""), [q, setQ] = useState("");
+  const [page, setPage] = useState(0), [per, setPer] = useState(10);
   const [L, setL] = useState(null);
   useEffect(() => {
     let live = true;
@@ -156,28 +157,35 @@ function SavedAds({ clients, reload }) {
   const rows = (L || []).flatMap(r => [
     ...(hasG(r) ? [{ k: `${r._id}g`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Google Ads", m: r, sent: r.sent }] : []),
     ...(r.meta ? [{ k: `${r._id}m`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Meta Ads", m: r.meta, sent: r.metaSent }] : []),
-  ]).filter(x => (!cid || x.cid === cid) && (!pl || x.pl === pl));
+  ]).filter(x => (!cid || x.cid === cid) && (!pl || x.pl === pl) && (!q || `${x.client} ${x.m.campaign || ""}`.toLowerCase().includes(q.toLowerCase())));
+  const pages = Math.max(1, Math.ceil(rows.length / per)), pg = Math.min(page, pages - 1);
+  const shown = rows.slice(pg * per, pg * per + per);
+  const sum = rows.reduce((o, x) => ({ spend: o.spend + (x.m.spend || 0), clicks: o.clicks + (x.m.clicks || 0), impr: o.impr + (x.m.impr || 0), conv: o.conv + (x.m.conv || 0) }), { spend: 0, clicks: 0, impr: 0, conv: 0 });
+  const f = (fn) => (e) => { fn(e.target.value); setPage(0); };
   const exportCsv = () => {
     const out = [["Date", "Client", "Platform", "Campaign", "Impressions", "Clicks", "CTR %", "Cost (Rs)", "CPC (Rs)", "Conversions", "Cost per conversion (Rs)", "Sent to client"]];
     rows.forEach(x => out.push([x.date, x.client, x.pl, x.m.campaign || "", x.m.impr || 0, x.m.clicks || 0, ctrOf(x.m).toFixed(2), x.m.spend || 0, cpcOf(x.m).toFixed(2), x.m.conv || 0, x.m.conv ? (x.m.spend / x.m.conv).toFixed(2) : "", x.sent ? "Yes" : "No"]));
-    downloadCsv(`ads-reports_${from}_to_${to}.csv`, out);
+    out.push([], ["Total", "", "", `${rows.length} reports`, sum.impr, sum.clicks, sum.impr ? ((sum.clicks / sum.impr) * 100).toFixed(2) : "", sum.spend, sum.clicks ? (sum.spend / sum.clicks).toFixed(2) : "", sum.conv, sum.conv ? (sum.spend / sum.conv).toFixed(2) : "", ""]);
+    const who = cid ? `_${(clients.find(c => c.id === cid)?.name || "client").replace(/[^a-z0-9]+/gi, "-")}` : "";
+    downloadCsv(`ads-reports${who}${pl ? `_${pl.replace(" ", "-")}` : ""}_${from}_to_${to}.csv`, out);
   };
   return (
     <section className="card"><h3>Saved reports <small>{rows.length}</small></h3>
       <div className="ar-bar">
-        <label className="md-date">From <input type="date" value={from} max={to} onChange={e => e.target.value && setFrom(e.target.value)} /></label>
-        <label className="md-date">To <input type="date" value={to} min={from} max={today()} onChange={e => e.target.value && setTo(e.target.value)} /></label>
-        <select value={cid} onChange={e => setCid(e.target.value)} aria-label="Client"><option value="">All clients</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-        <select value={pl} onChange={e => setPl(e.target.value)} aria-label="Platform"><option value="">Google and Meta</option><option>Google Ads</option><option>Meta Ads</option></select>
-        <span style={{ flex: 1 }} />
-        <button type="button" className="btn" disabled={!rows.length} onClick={exportCsv}>Export</button>
+        <label className="ar-f"><span>From</span><input type="date" value={from} max={to} onChange={e => { if (e.target.value) { setFrom(e.target.value); setPage(0); } }} /></label>
+        <label className="ar-f"><span>To</span><input type="date" value={to} min={from} max={today()} onChange={e => { if (e.target.value) { setTo(e.target.value); setPage(0); } }} /></label>
+        <label className="ar-f"><span>Client</span><select value={cid} onChange={f(setCid)}><option value="">All clients</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="ar-f"><span>Platform</span><select value={pl} onChange={f(setPl)}><option value="">Google and Meta</option><option>Google Ads</option><option>Meta Ads</option></select></label>
+        <label className="ar-f ar-q"><span>Search</span><input type="search" value={q} onChange={f(setQ)} placeholder="Client or campaign" /></label>
+        <button type="button" className="btn p ar-exp" disabled={!rows.length} onClick={exportCsv} title="Downloads the reports matching these filters">Export {rows.length ? `(${rows.length})` : ""}</button>
       </div>
-      {L == null ? <div className="empty">Loading…</div> : !rows.length ? <div className="empty">No reports saved for these dates.</div> : (
+      {rows.length > 0 && <div className="ar-sum"><span><small>Cost</small><b>{rs(sum.spend)}</b></span><span><small>Impressions</small><b>{sum.impr.toLocaleString("en-IN")}</b></span><span><small>Clicks</small><b>{sum.clicks.toLocaleString("en-IN")}</b></span><span><small>CTR</small><b>{sum.impr ? ((sum.clicks / sum.impr) * 100).toFixed(2) : "0.00"}%</b></span><span><small>Conversions</small><b>{sum.conv}</b></span><span><small>Cost per conversion</small><b>{sum.conv ? rs(sum.spend / sum.conv) : "-"}</b></span></div>}
+      {L == null ? <div className="empty">Loading…</div> : !rows.length ? <div className="empty">No reports for these filters.</div> : (<>
         <div className="ar-tw"><table>
           <thead><tr><th>Date</th><th>Client</th><th>Platform</th><th>Campaign</th><th style={{ textAlign: "right" }}>Impressions</th><th style={{ textAlign: "right" }}>Clicks</th><th style={{ textAlign: "right" }}>CTR</th><th style={{ textAlign: "right" }}>Cost</th><th style={{ textAlign: "right" }}>CPC</th><th style={{ textAlign: "right" }}>Conversions</th><th>Sent</th></tr></thead>
-          <tbody>{rows.map(x => (
+          <tbody>{shown.map(x => (
             <tr key={x.k}>
-              <td>{fdw(x.date)}</td><td>{x.client}</td><td><span className={`pill ${x.pl === "Meta Ads" ? "p-blue" : "p-amb"}`}>{x.pl}</span></td><td>{x.m.campaign || "-"}</td>
+              <td>{fdw(x.date)}</td><td>{x.client}</td><td><span className={`pill ${x.pl === "Meta Ads" ? "p-blue" : "p-amb"}`}>{x.pl}</span></td><td className="ar-camp" title={x.m.campaign || ""}>{x.m.campaign || "-"}</td>
               <td style={{ textAlign: "right" }}>{(x.m.impr || 0).toLocaleString("en-IN")}</td><td style={{ textAlign: "right" }}>{(x.m.clicks || 0).toLocaleString("en-IN")}</td>
               <td style={{ textAlign: "right" }}>{ctrOf(x.m).toFixed(2)}%</td><td style={{ textAlign: "right" }}><b>{rs(x.m.spend || 0)}</b></td><td style={{ textAlign: "right" }}>{rs(cpcOf(x.m))}</td>
               <td style={{ textAlign: "right" }}><b>{x.m.conv || 0}</b></td>
@@ -185,7 +193,15 @@ function SavedAds({ clients, reload }) {
             </tr>
           ))}</tbody>
         </table></div>
-      )}
+        <div className="ar-pg">
+          <span className="sub">{pg * per + 1}–{Math.min(rows.length, pg * per + per)} of {rows.length}</span>
+          <label className="ar-per">Rows <select value={per} onChange={e => { setPer(+e.target.value); setPage(0); }}>{[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="btn sm" disabled={pg === 0} onClick={() => setPage(pg - 1)}>Previous</button>
+          <span className="ar-pn">Page {pg + 1} of {pages}</span>
+          <button type="button" className="btn sm" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>Next</button>
+        </div>
+      </>)}
     </section>
   );
 }
