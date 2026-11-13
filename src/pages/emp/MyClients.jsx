@@ -43,11 +43,11 @@ function DoneList({ c, type, onClose }) {
     downloadCsv(`${DONE_T[type].replace(/\s+/g, "-")}_${c.name.replace(/[^a-z0-9]+/gi, "-")}.csv`, [head, ...rows]);
   };
   return (
-    <Modal title={`${DONE_T[type]} this month · ${c.name}`} onClose={onClose}>
+    <Modal wide title={`${DONE_T[type]} this month · ${c.name}`} onClose={onClose}>
       {L == null ? <div className="empty">Loading…</div> : !L.length ? <div className="empty">Nothing added this month yet.</div> : (
         <div className="dl">
           <div className="dl-bar"><span className="sub">{L.length} this month, newest first</span><button type="button" className="btn sm" onClick={exportCsv}>Export</button></div>
-          <div className="dl-tw"><table className="dl-t">
+          <div className="dl-tw"><table className="dl-tab">
             <thead>{ads ? <tr><th>#</th><th>Date</th><th>Campaign</th><th className="r">Cost</th><th className="r">Clicks</th><th className="r">Leads</th><th>Status</th></tr>
               : <tr><th>#</th><th>Date</th><th>Title</th><th>Keyword</th><th>By</th><th>Link</th></tr>}</thead>
             <tbody>{L.map((x, i) => ads ? (
