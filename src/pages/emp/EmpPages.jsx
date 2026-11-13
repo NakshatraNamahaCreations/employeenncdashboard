@@ -269,6 +269,31 @@ function TrackingFields() {
   );
 }
 
+// Social media posts: pick the platforms, then a link box for each one picked
+const SOCIAL = ["Instagram", "Facebook", "LinkedIn", "YouTube", "X (Twitter)", "GMB"];
+const sKey = (p) => p.replace(/[^a-z]/gi, "").toLowerCase();
+function SocialFields() {
+  const px = useContext(Pfx);
+  const [on, setOn] = useState(["Instagram"]);
+  const flip = (p) => setOn(L => (L.includes(p) ? (L.length > 1 ? L.filter(x => x !== p) : L) : [...L, p]));
+  return (
+    <>
+      <Inp name="title" label="Posts scheduled" required placeholder="November festive posts" />
+      <div className="g2"><Inp name="posts" label="Number of posts" type="number" min="1" defaultValue="1" /><div /></div>
+      <div className="f"><label>Platform <small className="sub" style={{ display: "inline" }}>pick one or more, then add the link for each</small></label>
+        <div className="lw-multi" role="group" aria-label="Platform">
+          {SOCIAL.map(p => <button type="button" key={p} className={on.includes(p) ? "on" : ""} aria-pressed={on.includes(p)} onClick={() => flip(p)}>{p}</button>)}
+        </div>
+        {on.map(p => <input key={p} type="hidden" name={`${px}platform`} value={p} />)}
+      </div>
+      {SOCIAL.filter(p => on.includes(p)).map(p => (
+        <Inp key={p} name={`slink_${sKey(p)}`} label={`${p} post link`} placeholder={p === "GMB" ? "g.page/..." : `${p} post link`} />
+      ))}
+      <Inp name="url" label="Planner or Drive link (optional)" />
+    </>
+  );
+}
+
 function Fields({ type, devs }) {
   const mod = <Inp name="mod" label="Module or screen" placeholder="Eg. Checkout, Home page" />;
   switch (type) {
@@ -332,8 +357,7 @@ function Fields({ type, devs }) {
     case "metaads": return (<><div className="g2"><Inp name="camp" label="Campaign name" required /><Sel name="platform" label="What was done" opts={["Meta · New campaign", "Meta · Ad or creative change", "Meta · Audience change", "Meta · Budget change", "Meta · Lead form", "Meta · Boosted post"]} /></div>
       <Inp name="title" label="Details" required placeholder="Lead campaign for Bangalore, 2 ad sets, 4 creatives" />
       <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="url" label="Ads Manager link (optional)" /></div></>);
-    case "social": return (<><Inp name="title" label="Posts scheduled" required placeholder="November festive posts" />
-      <div className="g3"><Sel name="platform" label="Platform" opts={["Instagram", "Facebook", "Instagram and Facebook", "LinkedIn", "YouTube", "X (Twitter)", "GMB"]} /><Inp name="posts" label="Number of posts" type="number" min="1" defaultValue="1" /><Inp name="url" label="Planner or Drive link" /></div></>);
+    case "social": return <SocialFields />;
     case "position": return (<><Inp name="title" label="What was tracked" required placeholder="Weekly rank check, top 20 keywords" />
       <div className="g2"><Inp name="kws" label="Keywords checked" type="number" min="1" /><Inp name="url" label="Sheet or tool link" /></div></>);
     case "monthly": return (<><div className="g2"><Inp name="month" label="Report for" type="month" required /><Inp name="url" label="Report link" placeholder="PDF, Doc or Looker Studio link" /></div>
@@ -405,6 +429,17 @@ export function LogWork() {
       const links = tools.map(t => ({ l: t.toUpperCase(), url: String(d[`link_${t}`] || "").trim() })).filter(x => x.url).map(x => ({ ...x, url: /^https?:/.test(x.url) ? x.url : `https://${x.url}` }));
       if (links.length) meta.links = links;
       d.url = links[0]?.url || "";
+    }
+    if (type === "social") {
+      // one link box per platform picked (each can have several with +)
+      const fix = (u) => (/^https?:/.test(u) ? u : `https://${u}`);
+      const links = fd.getAll(`${px}platform`).flatMap(p => {
+        const U = fd.getAll(`${px}slink_${sKey(String(p))}`).map(u => String(u).trim()).filter(Boolean);
+        return U.map((u, i) => ({ l: U.length > 1 ? `${p} ${i + 1}` : String(p), url: fix(u) }));
+      });
+      const all = [...links, ...urls.map((u, i) => ({ l: urls.length > 1 ? `Planner ${i + 1}` : "Planner", url: fix(u) }))];
+      if (all.length) meta.links = all;
+      if (!d.url && links.length) d.url = links[0].url;
     }
     // title or link: one of the two is enough
     if (["blog", "gmb", "onpage", "webcontent", "blogcontent", "landing"].includes(type) && !titles.length && !urls.length) return { err: type === "gmb" ? "Fill the post headline or the post link" : "Fill the title or the link" };
