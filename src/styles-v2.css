@@ -902,3 +902,18 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .md-del { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 8px; border: 0; background: transparent; color: var(--mut); display: grid; place-items: center; cursor: pointer; }
 .md-del:hover { background: var(--redBg); color: var(--red); }
 @media (max-width: 860px) { .md-form-b { grid-template-columns: 1fr; } }
+
+/* Daily ads report: one box per campaign */
+.ad-camp { border: 1px solid var(--line); border-radius: 14px; padding: 14px 14px 2px; margin-bottom: 12px; background: #FBFCFE; }
+.ad-camp-h { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+.ad-x { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--mut); font-size: 22px; line-height: 1; cursor: pointer; flex: none; }
+.ad-x:hover { background: var(--redBg); color: var(--red); border-color: #FECACA; }
+.ad-add { width: 100%; border: 1.5px dashed #BFD3FE; background: var(--priBg); color: var(--pri); font: inherit; font-weight: 600; border-radius: 12px; padding: 11px; cursor: pointer; margin-bottom: 12px; }
+.ad-add:disabled { opacity: .5; cursor: not-allowed; }
+.ad-tot { background: #F1F5F9; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; color: var(--navy); margin-bottom: 14px; }
+
+/* Log work: choice lists where one or more can be picked */
+.lw-multi { display: flex; flex-wrap: wrap; gap: 8px; }
+.lw-multi button { border: 1.5px solid var(--line); background: #fff; color: var(--navy); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.lw-multi button:hover { border-color: #BFD3FE; }
+.lw-multi button.on { background: var(--priBg); border-color: var(--pri); color: var(--pri); font-weight: 600; }

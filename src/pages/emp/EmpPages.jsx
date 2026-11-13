@@ -186,7 +186,7 @@ export function Blocked({ refs, onClose, onSubmit }) {
 
 /* ───────── Log work ───────── */
 const Pfx = createContext("");
-function TitleInp({ n, label, required, placeholder, ...rest }) {
+function TitleInp({ n, label, required, placeholder, title: isTitle, type = "text", ...rest }) {
   const [rows, setRows] = useState([0]);
   const add = () => setRows(L => [...L, Math.max(...L) + 1]);
   return (
@@ -194,7 +194,7 @@ function TitleInp({ n, label, required, placeholder, ...rest }) {
       <div className="lw-titles">
         {rows.map((k, i) => (
           <div key={k} className="lw-trow">
-            <input id={i ? undefined : `i-${n}`} name={n} type="text" required={required && i === 0} placeholder={i ? "Another one" : placeholder} aria-label={i ? `${label} ${i + 1}` : undefined} autoFocus={i > 0}
+            <input id={i ? undefined : `i-${n}`} name={n} type={type} required={required && i === 0} placeholder={i ? "Another one" : placeholder} aria-label={i ? `${label} ${i + 1}` : undefined} autoFocus={i > 0}
               onKeyDown={e => { if (e.key === "Enter" && e.currentTarget.value.trim()) { e.preventDefault(); add(); } }} {...rest} />
             {i === rows.length - 1
               ? <button type="button" className="lw-tadd" onClick={add} title="Add another" aria-label="Add another"><Plus size={17} /></button>
@@ -202,20 +202,38 @@ function TitleInp({ n, label, required, placeholder, ...rest }) {
           </div>
         ))}
       </div>
-      {rows.length > 1 && <span className="sub">Each line is saved as its own entry. The time below is shared between them.</span>}
+      {rows.length > 1 && isTitle && <span className="sub">Each line is saved as its own entry. The time below is shared between them.</span>}
     </div>
   );
 }
 function Inp({ name, label, type = "text", ...rest }) {
-  const n = useContext(Pfx) + name;
-  if (name === "title") return <TitleInp n={n} label={label} {...rest} />;
+  const px = useContext(Pfx), n = px + name;   // px is set only inside "What you did"
+  if (px && name === "title") return <TitleInp n={n} label={label} title {...rest} />;
+  // other text and link boxes: a + adds another value (several campaigns, keywords, links…)
+  if (px && (type === "text" || type === "url") && !name.startsWith("link_")) return <TitleInp n={n} label={label} type={type} {...rest} />;
   return (
     <div className="f"><label htmlFor={`i-${n}`}>{label}</label>
       {type === "password" ? <PwInput id={`i-${n}`} name={n} {...rest} /> : <input id={`i-${n}`} name={n} type={type} {...rest} />}</div>
   );
 }
+function MultiSel({ n, label, opts, defaultValue }) {
+  const L = opts.map(o => (Array.isArray(o) ? o : [o, o]));
+  const [on, setOn] = useState([defaultValue ?? L[0]?.[0]]);
+  const flip = (v) => setOn(s => (s.includes(v) ? (s.length > 1 ? s.filter(x => x !== v) : s) : [...s, v]));
+  return (
+    <div className="f"><label>{label} <small className="sub" style={{ display: "inline" }}>pick one or more</small></label>
+      <div className="lw-multi" role="group" aria-label={label}>
+        {L.map(([v, l]) => (
+          <button type="button" key={v} className={on.includes(v) ? "on" : ""} aria-pressed={on.includes(v)} onClick={() => flip(v)}>{l}</button>
+        ))}
+      </div>
+      {on.map(v => <input key={v} type="hidden" name={n} value={v} />)}
+    </div>
+  );
+}
 function Sel({ name, label, opts, ...rest }) {
-  const n = useContext(Pfx) + name;
+  const px = useContext(Pfx), n = px + name;
+  if (px && !["assign", "sev"].includes(name)) return <MultiSel n={n} label={label} opts={opts} defaultValue={rest.defaultValue} />;
   return (
     <div className="f"><label htmlFor={`i-${n}`}>{label}</label>
       <select id={`i-${n}`} name={n} {...rest}>{opts.map(o => (Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>))}</select></div>
@@ -346,7 +364,14 @@ export function LogWork() {
   // one piece of work (fields named with the block's prefix) → { items, hrs } or an error message
   const build = (fd, px, proof) => {
     const d = {};
-    for (const [k, v] of fd.entries()) if (k.startsWith(px)) d[k.slice(px.length)] = v;
+    for (const [k, v] of fd.entries()) {
+      if (!k.startsWith(px)) continue;
+      const key = k.slice(px.length), val = String(v).trim();
+      if (key === "url" || !val) { if (!(key in d)) d[key] = val; continue; }
+      d[key] = d[key] ? `${d[key]}, ${val}` : val;   // several values of one box: "Campaign A, Campaign B"
+    }
+    const urls = fd.getAll(`${px}url`).map(u => String(u).trim()).filter(Boolean);
+    d.url = urls[0] || "";
     const titles = fd.getAll(`${px}title`).map(t => String(t).trim()).filter(Boolean);
     d.title = titles[0] || "";
     const meta = {};
@@ -355,6 +380,7 @@ export function LogWork() {
     if (type === "bug" && d.assign) meta.assignName = devs.find(x => x.id === d.assign)?.name || "";
     if (type === "screen" || type === "revision") meta.send = !!d.send;
     if (proof.length) meta.files = proof;
+    if (urls.length > 1) meta.links = urls.map((u, i) => ({ l: `Link ${i + 1}`, url: /^https?:/.test(u) ? u : `https://${u}` }));
     if (type === "tracking") {
       const tools = fd.getAll(`${px}tools`);
       if (!tools.length) return { err: "Tick at least one: GSC, GA4 or GTM" };

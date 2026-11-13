@@ -190,6 +190,9 @@ function SavedAds({ clients, reload }) {
   );
 }
 
+const CAMP0 = { campaign: "", impr: "", clicks: "", ctr: "", spend: "", cpc: "", conv: "" };
+let kSeq = 1;
+const newK = () => ++kSeq;
 function AdsReport() {
   const P = usePortal();
   const C = P.assigned.clients;
@@ -197,7 +200,10 @@ function AdsReport() {
   const client = cid || C[0]?.id || "";
   const cl = C.find(c => c.id === client);
   const H = useGet(client ? `/ads?client=${client}` : "");
-  const [f, setF] = useState({ contact: "", campaign: "", spend: "", clicks: "", impr: "", ctr: "", cpc: "", conv: "" });
+  const [f, setF] = useState({ contact: "" });
+  // one row per campaign (a client can run 2 or 3 at once); the report saves their totals too
+  const [rows, setRows] = useState([{ ...CAMP0, k: 1 }]);
+  const setRow = (k, key) => (e) => setRows(L => L.map(r => (r.k === k ? { ...r, [key]: e.target.value } : r)));
   const [plat, setPlat] = useState("google");   // google | meta
   const [fileKey, setFileKey] = useState(0);     // clears the chosen file after a save
   const [rn, setRn] = useState(0);               // reloads the saved reports after a save
@@ -208,37 +214,57 @@ function AdsReport() {
   const [busy, setBusy] = useState(false);
   const L = useMemo(() => parseTerms(terms), [terms]);
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
-  const sp = +f.spend || L.reduce((a, t) => a + t.cost, 0);
+  const tot = rows.reduce((o, r) => ({ spend: o.spend + (+r.spend || 0), clicks: o.clicks + (+r.clicks || 0), impr: o.impr + (+r.impr || 0), conv: o.conv + (+r.conv || 0) }), { spend: 0, clicks: 0, impr: 0, conv: 0 });
+  const sp = tot.spend || L.reduce((a, t) => a + t.cost, 0);
   const w = wasted(L, sp);
   const onFile = (file) => { if (!file) return; const r = new FileReader(); r.onload = () => { setTerms(String(r.result)); toast("Search terms loaded"); }; r.readAsText(file); };
   const pickClient = (v) => { setCid(v); setMsg(""); setSaved(null); };
   const PL = plat === "meta" ? "Meta Ads" : "Google Ads";
   // CTR and CPC: what was typed, else worked out from the numbers
-  const autoCtr = +f.impr ? ((+f.clicks / +f.impr) * 100).toFixed(2) : "";
-  const autoCpc = +f.clicks ? (+f.spend / +f.clicks).toFixed(2) : "";
+  const autoCtr = (r) => (+r.impr ? ((+r.clicks / +r.impr) * 100).toFixed(2) : "");
+  const autoCpc = (r) => (+r.clicks ? (+r.spend / +r.clicks).toFixed(2) : "");
 
   const write = async (e) => {
     e.preventDefault();
-    const has = (v) => String(v).trim() !== "";
-    const clicks = +f.clicks || 0, impr = +f.impr || 0, conv = +f.conv || 0, spend = +f.spend || 0;
-    const ctr = has(f.ctr) ? +f.ctr : autoCtr, cpc = has(f.cpc) ? +f.cpc : autoCpc;
+    const has = (v) => String(v ?? "").trim() !== "";
+    const R = rows.filter(r => ["campaign", "impr", "clicks", "ctr", "spend", "cpc", "conv"].some(k => has(r[k])));
+    const any = (k) => R.some(r => has(r[k]));
+    const one = R.length === 1 ? R[0] : null;
+    const { clicks, impr, conv, spend } = tot;
+    const ctr = one && has(one.ctr) ? +one.ctr : impr ? ((clicks / impr) * 100).toFixed(2) : "";
+    const cpc = one && has(one.cpc) ? +one.cpc : clicks ? (spend / clicks).toFixed(2) : "";
+    const names = R.map(r => r.campaign.trim()).filter(Boolean);
     const google = plat === "google";
     const top = google ? [...L].sort((a, b) => b.clicks - a.clicks).slice(0, 5) : [];
     const contact = f.contact || cl?.contact || "";
     const isToday = day === today();
     setBusy(true);
     try {
-      const j = await api("/ads", { method: "POST", body: { client, date: day, platform: plat, campaign: f.campaign, spend: f.spend, clicks: f.clicks, impr: f.impr, ctr: f.ctr, cpc: f.cpc, conv: f.conv, ...(google ? { terms: L, negs: w.map(t => t.t) } : {}) } });
+      const j = await api("/ads", { method: "POST", body: {
+        client, date: day, platform: plat, campaign: names.join(", "),
+        spend: any("spend") ? spend : "", clicks: any("clicks") ? clicks : "", impr: any("impr") ? impr : "", conv: any("conv") ? conv : "",
+        ctr: one ? one.ctr : "", cpc: one ? one.cpc : "",
+        campaigns: R.map(r => ({ campaign: r.campaign.trim(), spend: r.spend, clicks: r.clicks, impr: r.impr, conv: r.conv, ctr: has(r.ctr) ? r.ctr : autoCtr(r), cpc: has(r.cpc) ? r.cpc : autoCpc(r) })),
+        ...(google ? { terms: L, negs: w.map(t => t.t) } : {}) } });
       setSaved({ ...j.data, plat });
       // only the numbers that were filled in go in the message
-      const lines = [
-        has(f.campaign) && `• Campaign: ${f.campaign.trim()}`,
-        has(f.spend) && `• Amount spent: ${rs(spend)}`,
-        has(f.impr) && `• Impressions: ${impr.toLocaleString("en-IN")}`,
-        has(f.clicks) && `• Clicks: ${clicks.toLocaleString("en-IN")}`,
+      const one1 = (r) => [
+        has(r.spend) && `${rs(+r.spend)} spent`, has(r.impr) && `${(+r.impr).toLocaleString("en-IN")} impressions`, has(r.clicks) && `${(+r.clicks).toLocaleString("en-IN")} clicks`,
+        (has(r.ctr) || autoCtr(r)) && `CTR ${has(r.ctr) ? r.ctr : autoCtr(r)}%`, (has(r.cpc) || autoCpc(r)) && `CPC ${rs(has(r.cpc) ? +r.cpc : +autoCpc(r))}`,
+        has(r.conv) && `${r.conv} conversion${+r.conv === 1 ? "" : "s"}`,
+      ].filter(Boolean).join(", ");
+      const lines = R.length > 1 ? [
+        ...R.map((r, i) => `• ${r.campaign.trim() || `Campaign ${i + 1}`}: ${one1(r) || "no numbers"}`),
+        "",
+        `Total: ${[any("spend") && `${rs(spend)} spent`, any("impr") && `${impr.toLocaleString("en-IN")} impressions`, any("clicks") && `${clicks.toLocaleString("en-IN")} clicks`, ctr !== "" && `CTR ${ctr}%`, any("conv") && `${conv} conversions${conv && spend ? ` (${rs(spend / conv)} each)` : ""}`].filter(Boolean).join(", ")}`,
+      ] : [
+        names[0] && `• Campaign: ${names[0]}`,
+        any("spend") && `• Amount spent: ${rs(spend)}`,
+        any("impr") && `• Impressions: ${impr.toLocaleString("en-IN")}`,
+        any("clicks") && `• Clicks: ${clicks.toLocaleString("en-IN")}`,
         ctr !== "" && `• CTR: ${ctr}%`,
         cpc !== "" && `• Cost per click: ${rs(cpc)}`,
-        has(f.conv) && `• Conversions: ${conv}${conv && spend ? ` | Cost per conversion: ${rs(spend / conv)}` : ""}`,
+        any("conv") && `• Conversions: ${conv}${conv && spend ? ` | Cost per conversion: ${rs(spend / conv)}` : ""}`,
       ].filter(Boolean);
       setMsg(`${greet()}${contact ? ` ${contact}` : ""}, here is ${isToday ? "today's" : `the ${fdw(day)}`} ${PL} update for ${cl?.name}${isToday ? ` (${fdw(day)})` : ""}:
 
@@ -248,7 +274,7 @@ Regards,
 ${P.session.user.name}, ${PL} team
 Nakshatra Namaha Creations`);
       toast("Saved. Check the message and send it.");
-      setF(s => ({ contact: s.contact, campaign: "", spend: "", clicks: "", impr: "", ctr: "", cpc: "", conv: "" }));
+      setRows([{ ...CAMP0, k: newK() }]);
       setTerms(""); setFileKey(k => k + 1);
       H.reload(); setRn(n => n + 1); P.refresh();
     } catch (ex) { toast(ex.message); }
@@ -276,18 +302,26 @@ Nakshatra Namaha Creations`);
                   <input id="ad" type="date" value={day} max={today()} onChange={e => { if (e.target.value) { setDay(e.target.value); setMsg(""); setSaved(null); } }} /></div>
                 <div className="f"><label htmlFor="acn">Contact name (for the message)</label><input id="acn" type="text" value={f.contact} onChange={set("contact")} placeholder={cl?.contact || "Eg. Supreeth sir"} /></div>
               </div>
-              <div className="g2">
-                <ClientPick clients={C} value={client} onChange={pickClient} />
-                <div className="f"><label htmlFor="acp">Campaign name</label><input id="acp" type="text" value={f.campaign} onChange={set("campaign")} placeholder="Eg. Ceramic coating - Search" /></div>
-              </div>
-              <div className="g3">
-                <div className="f"><label htmlFor="ai">Impressions</label><input id="ai" type="number" min="0" value={f.impr} onChange={set("impr")} /></div>
-                <div className="f"><label htmlFor="acl">Clicks</label><input id="acl" type="number" min="0" value={f.clicks} onChange={set("clicks")} /></div>
-                <div className="f"><label htmlFor="actr">CTR (%)</label><input id="actr" type="number" min="0" step="0.01" value={f.ctr} onChange={set("ctr")} placeholder={autoCtr ? `${autoCtr} (auto)` : ""} /></div>
-                <div className="f"><label htmlFor="as">Cost (₹)</label><input id="as" type="number" min="0" step="0.01" value={f.spend} onChange={set("spend")} /></div>
-                <div className="f"><label htmlFor="acpc">CPC (₹)</label><input id="acpc" type="number" min="0" step="0.01" value={f.cpc} onChange={set("cpc")} placeholder={autoCpc ? `${autoCpc} (auto)` : ""} /></div>
-                <div className="f"><label htmlFor="av">Conversions</label><input id="av" type="number" min="0" value={f.conv} onChange={set("conv")} /></div>
-              </div>
+              <ClientPick clients={C} value={client} onChange={pickClient} />
+              {rows.map((r, i) => (
+                <div key={r.k} className="ad-camp">
+                  <div className="ad-camp-h">
+                    <div className="f" style={{ margin: 0, flex: 1 }}><label htmlFor={`acp${r.k}`}>{rows.length > 1 ? `Campaign ${i + 1}` : "Campaign name"}</label>
+                      <input id={`acp${r.k}`} type="text" value={r.campaign} onChange={setRow(r.k, "campaign")} placeholder="Eg. Ceramic coating - Search" /></div>
+                    {rows.length > 1 && <button type="button" className="ad-x" onClick={() => setRows(L => L.filter(x => x.k !== r.k))} aria-label={`Remove campaign ${i + 1}`} title="Remove this campaign">×</button>}
+                  </div>
+                  <div className="g3">
+                    <div className="f"><label htmlFor={`ai${r.k}`}>Impressions</label><input id={`ai${r.k}`} type="number" min="0" value={r.impr} onChange={setRow(r.k, "impr")} /></div>
+                    <div className="f"><label htmlFor={`acl${r.k}`}>Clicks</label><input id={`acl${r.k}`} type="number" min="0" value={r.clicks} onChange={setRow(r.k, "clicks")} /></div>
+                    <div className="f"><label htmlFor={`actr${r.k}`}>CTR (%)</label><input id={`actr${r.k}`} type="number" min="0" step="0.01" value={r.ctr} onChange={setRow(r.k, "ctr")} placeholder={autoCtr(r) ? `${autoCtr(r)} (auto)` : ""} /></div>
+                    <div className="f"><label htmlFor={`as${r.k}`}>Cost (₹)</label><input id={`as${r.k}`} type="number" min="0" step="0.01" value={r.spend} onChange={setRow(r.k, "spend")} /></div>
+                    <div className="f"><label htmlFor={`acpc${r.k}`}>CPC (₹)</label><input id={`acpc${r.k}`} type="number" min="0" step="0.01" value={r.cpc} onChange={setRow(r.k, "cpc")} placeholder={autoCpc(r) ? `${autoCpc(r)} (auto)` : ""} /></div>
+                    <div className="f"><label htmlFor={`av${r.k}`}>Conversions</label><input id={`av${r.k}`} type="number" min="0" value={r.conv} onChange={setRow(r.k, "conv")} /></div>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="ad-add" onClick={() => setRows(L => [...L, { ...CAMP0, k: newK() }])} disabled={rows.length >= 10}>+ Add another campaign</button>
+              {rows.length > 1 && <div className="ad-tot">Total for {rows.length} campaigns: <b>{rs(tot.spend)}</b> spent · {tot.impr.toLocaleString("en-IN")} impressions · {tot.clicks.toLocaleString("en-IN")} clicks · {tot.conv} conversions</div>}
               {plat === "google" && <>
               <div className="f"><label htmlFor="tf">Search terms report (optional): upload the CSV from Google Ads</label><input key={fileKey} id="tf" type="file" accept=".csv,.txt,.tsv" onChange={e => onFile(e.target.files[0])} /></div>
               <div className="f"><label htmlFor="tt">or paste it here (search term, clicks, cost, conversions)</label>
