@@ -285,20 +285,23 @@ function MyDocs({ assigned }) {
   const days = [...new Set(shown.map(d => d.date))];
 
   return (
-    <div className="md-grid">
-      <section className="card md-form"><h3><Upload size={16} /> Import documents</h3>
-        <form className="pad" onSubmit={save}>
-          <div className="f"><label>Files</label>
-            <FilePick id="md-files" files={files} onChange={setFiles} hint="Drop files, paste a screenshot (Ctrl+V), or browse. Videos up to 100 MB." /></div>
-          <div className="g2">
-            <div className="f"><label htmlFor="md-d">Date</label><input id="md-d" type="date" value={f.date} max={todayStr()} onChange={set("date")} required /></div>
-            <div className="f"><label htmlFor="md-r">Project or client (optional)</label>
-              <input id="md-r" list="md-refs" value={f.refName} onChange={set("refName")} placeholder="Pick or type" />
-              <datalist id="md-refs">{refs.map(r => <option key={r} value={r} />)}</datalist></div>
+    <div className="md-wrap">
+      <section className="card md-form"><h3><Upload size={16} /> Import documents <small>saved with the date you pick</small></h3>
+        <form className="md-form-b" onSubmit={save}>
+          <div className="md-drop">
+            <FilePick id="md-files" files={files} onChange={setFiles} hint="Drop files, paste a screenshot (Ctrl+V), or browse. Videos up to 100 MB." />
           </div>
-          <div className="f"><label htmlFor="md-t">Title (optional)</label><input id="md-t" value={f.title} onChange={set("title")} placeholder="Uses the file name if left empty" /></div>
-          <div className="f"><label htmlFor="md-n">Note (optional)</label><textarea id="md-n" rows={2} value={f.note} onChange={set("note")} /></div>
-          <button type="submit" className="btn p lg" style={{ width: "100%", justifyContent: "center" }} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+          <div className="md-fields">
+            <div className="g2">
+              <div className="f"><label htmlFor="md-d">Date</label><input id="md-d" type="date" value={f.date} max={todayStr()} onChange={set("date")} required /></div>
+              <div className="f"><label htmlFor="md-r">Project or client</label>
+                <input id="md-r" list="md-refs" value={f.refName} onChange={set("refName")} placeholder="Optional" />
+                <datalist id="md-refs">{refs.map(r => <option key={r} value={r} />)}</datalist></div>
+            </div>
+            <div className="f"><label htmlFor="md-t">Title</label><input id="md-t" value={f.title} onChange={set("title")} placeholder="Optional. The file name is used if empty" /></div>
+            <div className="f"><label htmlFor="md-n">Note</label><input id="md-n" value={f.note} onChange={set("note")} placeholder="Optional" /></div>
+            <button type="submit" className="btn p lg md-save" disabled={busy}><Upload size={16} /> {busy ? "Saving…" : "Save document"}</button>
+          </div>
         </form>
       </section>
 
@@ -314,16 +317,29 @@ function MyDocs({ assigned }) {
           <div className="dc-empty"><span><Archive size={26} /></span><b>{q || from || to ? "Nothing for this search or dates" : "No documents yet"}</b><small>Import files on the left. They are saved with the date you pick.</small></div>
         ) : days.map(day => (
           <div key={day} className="md-day">
-            <div className="md-day-h">{fdate(day)} <small>{shown.filter(d => d.date === day).length}</small></div>
-            {shown.filter(d => d.date === day).map(d => (
-              <div key={d._id} className="md-item">
-                <div className="md-it-h"><b>{d.title}</b>{d.refName && <span className="dc-chip">{d.refName}</span>}
-                  <button type="button" className="btn sm md-del" onClick={() => remove(d)} aria-label={`Delete ${d.title}`}><Trash2 size={13} /></button></div>
-                {d.note && <p className="md-note"><Linkify text={d.note} /></p>}
-                <FileGrid files={d.files} />
-                {d.files.length > 0 && <div className="md-dl">{d.files.map(x => <a key={x.url} href={fileUrl(x.url)} download={x.name} target="_blank" rel="noopener noreferrer"><Download size={12} /> {x.name}</a>)}</div>}
-              </div>
-            ))}
+            <div className="md-day-h"><span>{fdate(day)}</span><small>{shown.filter(d => d.date === day).length} document{shown.filter(d => d.date === day).length === 1 ? "" : "s"}</small></div>
+            <div className="md-cards">
+              {shown.filter(d => d.date === day).map(d => {
+                const img = d.files.find(isImg);
+                return (
+                  <div key={d._id} className="md-card">
+                    <div className="md-thumb">
+                      {img ? <img src={fileUrl(img.url)} alt={img.name} loading="lazy" />
+                        : d.files[0] ? <span className={`md-ext${isVid(d.files[0]) ? " vid" : ""}`}>{isVid(d.files[0]) ? <Film size={22} /> : <FileText size={22} />}<em>{isVid(d.files[0]) ? "VIDEO" : ext(d.files[0])}</em></span>
+                          : <span className="md-ext"><FileText size={22} /><em>NOTE</em></span>}
+                      {d.files.length > 1 && <span className="md-count">+{d.files.length - 1}</span>}
+                    </div>
+                    <div className="md-body">
+                      <b title={d.title}>{d.title}</b>
+                      {d.refName && <span className="md-ref">{d.refName}</span>}
+                      {d.note && <p className="md-note"><Linkify text={d.note} /></p>}
+                      {d.files.length > 0 && <div className="md-dl">{d.files.map(x => <a key={x.url} href={fileUrl(x.url)} download={x.name} target="_blank" rel="noopener noreferrer" title={x.name}><Download size={12} /> <span>{x.name}</span></a>)}</div>}
+                    </div>
+                    <button type="button" className="md-del" onClick={() => remove(d)} aria-label={`Delete ${d.title}`} title="Delete"><Trash2 size={14} /></button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))}
       </section>

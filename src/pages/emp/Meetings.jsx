@@ -295,9 +295,9 @@ export default function Meetings() {
               <div className="f"><label htmlFor="m3">Date</label><input id="m3" name="date" type="date" required defaultValue={m?.date || newDate || today()} /></div>
               <div className="f"><label htmlFor="m4">Time</label><input id="m4" name="time" type="time" defaultValue={m?.time || ""} /></div>
               <div className="f"><label htmlFor="m5">Duration</label>
-                <div className="lw-time">
-                  <input id="m5" name="dh" type="number" min="0" max="12" step="1" defaultValue={HM(m?.dur)[0]} aria-label="Hours" /><span>h</span>
-                  <select name="dm" defaultValue={HM(m?.dur)[1]} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(x => <option key={x} value={x}>{x}</option>)}</select><span>min</span>
+                <div className="dur">
+                  <select id="m5" name="dh" defaultValue={HM(m?.dur)[0]} aria-label="Hours">{Array.from({ length: 13 }, (_, i) => i).map(x => <option key={x} value={x}>{x} h</option>)}</select>
+                  <select name="dm" defaultValue={HM(m?.dur)[1]} aria-label="Minutes">{Array.from({ length: 12 }, (_, i) => i * 5).map(x => <option key={x} value={x}>{x} min</option>)}</select>
                 </div></div>
             </div>
             <div className="g2">

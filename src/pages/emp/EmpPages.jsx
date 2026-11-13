@@ -186,8 +186,29 @@ export function Blocked({ refs, onClose, onSubmit }) {
 
 /* ───────── Log work ───────── */
 const Pfx = createContext("");
+function TitleInp({ n, label, required, placeholder, ...rest }) {
+  const [rows, setRows] = useState([0]);
+  const add = () => setRows(L => [...L, Math.max(...L) + 1]);
+  return (
+    <div className="f"><label htmlFor={`i-${n}`}>{label}{rows.length > 1 && <small className="sub" style={{ display: "inline", marginLeft: 6 }}>{rows.length} items</small>}</label>
+      <div className="lw-titles">
+        {rows.map((k, i) => (
+          <div key={k} className="lw-trow">
+            <input id={i ? undefined : `i-${n}`} name={n} type="text" required={required && i === 0} placeholder={i ? "Another one" : placeholder} aria-label={i ? `${label} ${i + 1}` : undefined} autoFocus={i > 0}
+              onKeyDown={e => { if (e.key === "Enter" && e.currentTarget.value.trim()) { e.preventDefault(); add(); } }} {...rest} />
+            {i === rows.length - 1
+              ? <button type="button" className="lw-tadd" onClick={add} title="Add another" aria-label="Add another"><Plus size={17} /></button>
+              : <button type="button" className="lw-tdel" onClick={() => setRows(L => L.filter(x => x !== k))} title="Remove" aria-label="Remove"><X size={15} /></button>}
+          </div>
+        ))}
+      </div>
+      {rows.length > 1 && <span className="sub">Each line is saved as its own entry. The time below is shared between them.</span>}
+    </div>
+  );
+}
 function Inp({ name, label, type = "text", ...rest }) {
   const n = useContext(Pfx) + name;
+  if (name === "title") return <TitleInp n={n} label={label} {...rest} />;
   return (
     <div className="f"><label htmlFor={`i-${n}`}>{label}</label>
       {type === "password" ? <PwInput id={`i-${n}`} name={n} {...rest} /> : <input id={`i-${n}`} name={n} type={type} {...rest} />}</div>
@@ -307,7 +328,6 @@ export function LogWork() {
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [blocks, setBlocks] = useState([{ id: 1, proof: [] }]);   // each piece of work, with its own screenshots or files
-  const addBlock = () => setBlocks(L => [...L, { id: Math.max(...L.map(b => b.id)) + 1, proof: [] }]);
   // FilePick passes either the new list or a function of the old one
   const setProof = (id, files) => setBlocks(L => L.map(b => (b.id === id ? { ...b, proof: typeof files === "function" ? files(b.proof) : files } : b)));
   const nav = useNavigate();
@@ -327,6 +347,8 @@ export function LogWork() {
   const build = (fd, px, proof) => {
     const d = {};
     for (const [k, v] of fd.entries()) if (k.startsWith(px)) d[k.slice(px.length)] = v;
+    const titles = fd.getAll(`${px}title`).map(t => String(t).trim()).filter(Boolean);
+    d.title = titles[0] || "";
     const meta = {};
     META_KEYS.forEach(k => { if (d[k] !== undefined && d[k] !== "") meta[k] = ["da", "words", "screens", "pass", "fail", "amt", "pages", "posts", "kws"].includes(k) ? +d[k] : d[k]; });
     if (meta.month) meta.month = new Date(`${meta.month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -340,7 +362,6 @@ export function LogWork() {
       const links = tools.map(t => ({ l: t.toUpperCase(), url: String(d[`link_${t}`] || "").trim() })).filter(x => x.url).map(x => ({ ...x, url: /^https?:/.test(x.url) ? x.url : `https://${x.url}` }));
       if (links.length) meta.links = links;
       d.url = links[0]?.url || "";
-      d.title = `${meta.tools} setup: ${d.title}`;
     }
     // work that needs proof: a link, or a screenshot or video
     if (["blog", "poster"].includes(type) && !String(d.url || "").trim() && !proof.length) return { err: "Add the link, or attach a screenshot or video" };
@@ -349,8 +370,8 @@ export function LogWork() {
     if (type === "backlink") {
       items = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean).map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u), meta }));
     } else {
-      const title = type === "negative" ? "Added negative keywords" : type === "gmb" ? `${d.gtype} post: ${d.title}` : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${d.title}` : d.title;
-      items = [{ title, url: url(d.url), meta }];
+      const name = (t) => (type === "gmb" ? `${d.gtype} post: ${t}` : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${t}` : type === "tracking" ? `${meta.tools} setup: ${t}` : t);
+      items = type === "negative" ? [{ title: "Added negative keywords", url: url(d.url), meta }] : (titles.length ? titles : [""]).map(t => ({ title: name(t), url: url(d.url), meta }));
     }
     const hrs = Math.max(0, +d.hh || 0) + (+d.mm || 0) / 60;
     if (hrs <= 0) return { err: "Enter the time spent, in hours and minutes" };
@@ -446,7 +467,6 @@ export function LogWork() {
                   </div>
                 </Pfx.Provider>
               ))}
-              <button type="button" className="lw-addmore" onClick={addBlock} disabled={blocks.length >= 15}><Plus size={16} /> Add another {type === "bug" ? "bug" : "piece of work"} {both.length ? "for the same " + (onClients ? "client" : "project") : ""}</button>
               <div className="lw-sec"><span className="lw-n">3</span><b>Date</b></div>
               <div className="g2"><Inp name="date" label="Date" type="date" defaultValue={today()} max={today()} /></div>
               <div className="lw-actions"><button type="button" className="btn lg" onClick={() => setType("")}>Cancel</button><button className="btn p lg" disabled={busy}>{busy ? "Saving…" : `${locked ? "Save as extra work" : "Save to timesheet"}${blocks.length > 1 ? ` (${blocks.length})` : ""}`}</button></div>
