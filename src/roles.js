@@ -38,6 +38,7 @@ export const TY = {
   backlink:    { g: "seo", l: "Backlinks",             h: "Paste one or more live links",               r: DM, c: true },
   gmb:         { g: "seo", l: "GMB post",              h: "Google Business Profile post",               r: DM, c: true },
   onpage:      { g: "seo", l: "On-page SEO",           h: "Meta tags, schema, speed, content",          r: DM, c: true },
+  indexing:    { g: "seo", l: "Page indexing",         h: "Pages submitted or checked in Search Console", r: DM, c: true },
   kwresearch:  { g: "seo", l: "Keyword research",      h: "Keywords found for a client, page or ad",    r: DM, c: true },
   // Google Ads
   campaign:    { g: "gads", l: "Campaign setup",       h: "New Search, PMax, Display or YouTube campaign", r: DM, c: true },

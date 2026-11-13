@@ -351,6 +351,9 @@ function Fields({ type, devs }) {
       <div className="g2"><Inp name="amt" label="Daily budget (₹)" type="number" min="0" /><Inp name="kw" label="Main keywords or audience" /></div>
       <Inp name="url" label="Link (optional)" /></>);
     case "tracking": return <TrackingFields />;
+    case "indexing": return (<><Inp name="title" label="Pages" required placeholder="Home, Services and 3 blog pages" />
+      <div className="g2"><Sel name="kind" label="Status" opts={["Indexing requested", "Indexed", "Not indexed yet", "Removed from index"]} /><Inp name="pages" label="Number of pages" type="number" min="1" defaultValue="1" /></div>
+      <Inp name="url" label="Page link" placeholder="https://example.com/services" /></>);
     case "kwresearch": return (<><Inp name="title" label="Research for" required placeholder="Dental implant pages / Diwali Google Ads campaign" />
       <div className="g2"><Inp name="kws" label="Keywords found" type="number" min="1" /><Inp name="kw" label="Main keyword" /></div>
       <Inp name="url" label="Keyword sheet link" placeholder="Google Sheet link" /></>);

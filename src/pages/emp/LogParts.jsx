@@ -27,6 +27,7 @@ const TIPS = {
   screen: ["Add the Figma link and the number of screens.", "Tick “Sent to the client” if it went for approval."],
   test: ["Enter how many cases passed and failed.", "Raise each failed case as a bug so a developer gets it."],
   bug: ["Pick the developer: they get a notification.", "Write clear steps to reproduce and add a screenshot or video link."],
+  indexing: ["Pick the status: indexing requested, indexed or not indexed yet.", "Add each page link with the +, or attach a Search Console screenshot."],
   logo: ["Pick the stage: first concepts, revision or final files.", "Add the Drive link or attach the logo files."],
   vcard: ["Add the Drive link or attach the card design, front and back."],
   brochure: ["Say how many pages and whether it is for print or digital.", "Add the Drive or PDF link, or attach the file."],
