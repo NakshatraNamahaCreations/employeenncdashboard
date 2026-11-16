@@ -981,3 +981,58 @@ td .lw-file { display: block; margin-top: 3px; width: fit-content; }
 .gv-li .x { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .gv-li .x b { font-weight: 500; overflow-wrap: anywhere; }
 .gv-li .pill { white-space: nowrap; }
+
+/* ───────── Professional finish: one clean typeface, calmer sizes, consistent surfaces ───────── */
+:root { --line: #E4E8EE; --bg: #F5F7FA; --text: #344054; --mut: #667085; --navy: #101828; }
+body { font-size: 14px; line-height: 1.55; letter-spacing: -0.006em; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; font-feature-settings: "cv11", "ss01"; }
+b, strong { font-weight: 600; }
+
+/* page titles */
+h2.t { font-size: 22px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.25; margin-bottom: 4px; }
+h2.t span { color: var(--pri); }
+.lead { font-size: 14px; color: var(--mut); line-height: 1.6; max-width: 900px; margin-bottom: 20px; }
+.bar b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.bar .s { font-size: 12.5px; }
+
+/* surfaces */
+.card, .kpi { border-color: var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.card > h3 { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; padding: 14px 18px; }
+.card > h3 small { font-size: 12.5px; font-weight: 400; }
+.li { padding: 12px 18px; }
+.empty { font-size: 13.5px; }
+
+/* numbers line up and read clearly */
+.kpi { padding: 16px 18px; }
+.kpi .l { font-size: 12.5px; font-weight: 500; color: var(--mut); }
+.kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; margin-top: 2px; }
+.kpi .s { font-size: 12px; }
+.kpi .v, .num, td.r, td.n, .ml-stat b, .mc-tile b, .ar-sum b, .bg-tile .n { font-variant-numeric: tabular-nums; }
+
+/* tables */
+th { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .045em; color: #667085; background: #F9FAFB; padding: 10px 14px; }
+td { font-size: 13.5px; color: var(--text); padding: 11px 14px; }
+tbody tr:hover td { background: #FAFBFC; }
+
+/* forms */
+.f label, .f > span.lbl { font-size: 13px; font-weight: 500; color: #344054; }
+input[type=text], input[type=email], input[type=tel], input[type=password], input[type=url], input[type=number], input[type=date], input[type=time], input[type=search], select, textarea {
+  border-color: #D0D5DD; border-radius: 9px; padding: 9px 12px; font-size: 14px; color: var(--navy); box-shadow: 0 1px 2px rgba(16, 24, 40, .03);
+}
+input::placeholder, textarea::placeholder { color: #98A2B3; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--pri); box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
+
+/* buttons, chips, pills */
+.btn { font-size: 13.5px; font-weight: 600; border-radius: 9px; border-color: #D0D5DD; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); transition: background .15s, border-color .15s; }
+.btn:not(.p):not(.g):not(.w):not(.d):not(.wa):not(:disabled):hover { background: #F9FAFB; }
+.btn.p:hover { background: var(--priD); }
+.btn.sm { font-size: 12.5px; font-weight: 500; }
+.chip { font-size: 13px; font-weight: 500; padding: 6px 14px; border-color: #D0D5DD; }
+.pill { font-size: 11.5px; font-weight: 600; letter-spacing: .01em; padding: 3px 9px; }
+.sub { font-size: 12.5px; color: var(--mut); }
+
+/* sidebar */
+aside.nav nav a { font-size: 13.5px; font-weight: 500; letter-spacing: -0.005em; }
+.grp { font-size: 10.5px; letter-spacing: .09em; font-weight: 600; color: #5B6B84; }
+.me b { font-size: 13.5px; font-weight: 600; }
+.me small { font-size: 11.5px; line-height: 1.4; }
+aside.nav .brand { letter-spacing: -0.01em; }
