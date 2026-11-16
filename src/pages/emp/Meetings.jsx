@@ -15,30 +15,14 @@ const normLink = (u) => { const v = String(u || "").trim(); return !v ? "" : /^h
 const HM = (dur) => { const t = Math.round((+dur || 1) * 60); return [Math.floor(t / 60), Math.round((t % 60) / 5) * 5 % 60]; };
 const hasPoints = (m) => !!(String(m.notes || "").trim() || m.files?.length || m.imgCount);
 
-/* Basic minutes from typed notes: sorts lines into points, decisions, actions and questions. */
-function quickMom(notes) {
-  const lines = String(notes || "").split(/\r?\n/).map(l => l.replace(/^\s*([-*•]|\d+[.)])\s*/, "").trim()).filter(Boolean);
-  const dec = /\b(decided|agreed|approved|confirmed|finali[sz]ed|go ahead|ok to|okay to|final)\b/i;
-  const act = /\b(will|to send|to share|to fix|to provide|to check|to retest|to call|action|todo|to do|pending from|by (mon|tues|wednes|thurs|fri|satur|sun)day|by \d)/i;
-  const nxt = /\bnext (meeting|review|call)\b/i;
-  const R = { discussed: [], decisions: [], actions: [], open: [], next: "" };
-  lines.forEach(l => {
-    if (nxt.test(l)) { R.next = l.replace(/^next (meeting|review|call)\s*(on|is)?\s*:?\s*/i, ""); return; }
-    if (l.includes("?")) { R.open.push(l); return; }
-    if (dec.test(l) && !/\bwill\b/i.test(l)) { R.decisions.push(l); return; }
-    if (act.test(l)) { R.actions.push(l); return; }
-    R.discussed.push(l);
-  });
-  return R;
-}
+/* The minutes: the meeting details on top, then the points exactly as they were typed or pasted */
 function momText(m, by) {
-  const R = quickMom(m.notes), o = [];
-  const sec = (h, L, num) => { if (L.length) o.push("", h, ...L.map((x, i) => (num ? `${i + 1}. ` : "• ") + x)); };
+  const o = [];
   o.push("MINUTES OF MEETING", m.title, `Date: ${fdw(m.date)}${m.time ? `, ${ampm(m.time)}` : ""} (${m.mode})`);
   if (m.refName) o.push(`Client: ${m.refName}`);
   if (m.theirs || m.ours) o.push(`Attendees: ${[m.theirs, m.ours ? `NNC: ${m.ours}` : ""].filter(Boolean).join(" | ")}`);
-  sec("Points discussed", R.discussed, true); sec("Decisions", R.decisions); sec("Action items", R.actions, true); sec("To be confirmed", R.open);
-  if (R.next) o.push("", `Next meeting: ${R.next}`);
+  const pts = String(m.notes || "").replace(/\s+$/, "");
+  if (pts.trim()) o.push("", pts);
   o.push("", `Prepared by ${by.name}, ${by.role}, Nakshatra Namaha Creations`);
   return o.join("\n");
 }
@@ -191,7 +175,7 @@ export default function Meetings() {
       fillT(rec, "reminder");
       return;
     }
-    if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes written from your points. Check them before sending."); }
+    if (withMom) { setMom(rec.momTxt); fillT(rec, "mom", rec.momTxt); toast("Minutes ready with your points as written. Check them before sending."); }
     else if (kind === "schedule") {
       toast(`Meeting scheduled for ${fdw(rec.date)}${rec.time ? `, ${ampm(rec.time)}` : ""}. After the meeting, open it and add the MOM points.`);
       setMid(""); setNewDate(""); setFlash(doc._id); window.scrollTo(0, 0);
