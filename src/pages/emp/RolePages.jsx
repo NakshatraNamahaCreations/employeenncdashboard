@@ -138,11 +138,130 @@ function parseTerms(txt) {
   const n = (s) => +String(s || "0").replace(/[^0-9.]/g, "") || 0;
   return lines.slice(start).map(split).filter(r => r[idx.t] && !/^total/i.test(r[idx.t])).map(r => ({ t: r[idx.t], clicks: n(r[idx.clicks]), cost: n(r[idx.cost]), conv: n(r[idx.conv]) }));
 }
+// Read a CSV file (the same columns as Export) into reports: one per client, day and platform, with its campaigns
+function parseCsv(txt) {
+  const out = [];
+  let row = [], cell = "", q = false;
+  const s = String(txt || "").replace(/^\uFEFF/, "");
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === "," || ch === "\t") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && s[i + 1] === "\n") i++; row.push(cell); out.push(row); row = []; cell = ""; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); out.push(row); }
+  return out.map(r => r.map(c => c.trim())).filter(r => r.some(Boolean));
+}
+const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+function toDay(v) {
+  const s = String(v || "").trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(s);   // 15/11/2026 (day first, as in India)
+  if (m) return `${m[3].length === 2 ? `20${m[3]}` : m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  m = /^(?:[a-z]{3},?\s+)?(\d{1,2})[\s-]+([a-z]{3,4})[a-z]*[\s,-]+(\d{4})$/i.exec(s);   // 15 Nov 2026, Sun, 15 Nov 2026
+  if (m && MON[m[2].toLowerCase()]) return `${m[3]}-${String(MON[m[2].toLowerCase()]).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return "";
+}
+function readAdsCsv(txt, clients) {
+  const rows = parseCsv(txt);
+  if (rows.length < 2) return { list: [], errs: ["The file has no rows"] };
+  const h = rows[0].map(x => x.toLowerCase());
+  const col = (re) => h.findIndex(x => re.test(x));
+  const I = { date: col(/^date|^day/), client: col(/^client/), pl: col(/^platform/), camp: col(/^campaign/), impr: col(/^impr/), clicks: col(/^clicks/), ctr: col(/^ctr/), spend: col(/^cost(?!.*conv)|^spend|^amount/), cpc: col(/^cpc|cost per click/), conv: col(/^conv/), sent: col(/^sent/) };
+  if (I.date < 0 || I.client < 0) return { list: [], errs: ["The first row must have the column names: Date, Client, Platform, Campaign, Impressions, Clicks, CTR %, Cost (Rs), CPC (Rs), Conversions, Sent to client"] };
+  const n = (v) => { const x = String(v ?? "").replace(/[^0-9.]/g, ""); return x === "" ? "" : +x; };
+  const byName = new Map(clients.map(c => [c.name.trim().toLowerCase(), c]));
+  const G = new Map(), errs = [];
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2, cv = (k) => (I[k] >= 0 ? r[I[k]] ?? "" : "");
+    if (/^total/i.test(cv("date")) || /^total/i.test(r[0] || "")) return;
+    const day = toDay(cv("date")), c = byName.get(String(cv("client")).trim().toLowerCase());
+    if (!day) { errs.push(`Row ${line}: date "${cv("date")}" not understood`); return; }
+    if (day > today()) { errs.push(`Row ${line}: ${day} is in the future`); return; }
+    if (!c) { errs.push(`Row ${line}: client "${cv("client")}" is not one of your clients`); return; }
+    const meta = /meta|facebook|insta/i.test(cv("pl"));
+    const k = `${c.id}|${day}|${meta ? "meta" : "google"}`;
+    if (!G.has(k)) G.set(k, { client: c.id, clientName: c.name, date: day, platform: meta ? "meta" : "google", sent: false, campaigns: [] });
+    const g = G.get(k);
+    if (/^y/i.test(cv("sent"))) g.sent = true;
+    g.campaigns.push({ campaign: cv("camp"), impr: n(cv("impr")), clicks: n(cv("clicks")), ctr: n(cv("ctr")), spend: n(cv("spend")), cpc: n(cv("cpc")), conv: n(cv("conv")) });
+  });
+  const list = [...G.values()].map(g => {
+    const t = (k) => g.campaigns.reduce((a, c) => a + (+c[k] || 0), 0), one = g.campaigns.length === 1 ? g.campaigns[0] : null;
+    return { ...g, campaign: g.campaigns.map(c => c.campaign).filter(Boolean).join(", "), spend: t("spend"), clicks: t("clicks"), impr: t("impr"), conv: t("conv"), ctr: one ? one.ctr : "", cpc: one ? one.cpc : "" };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+  return { list, errs };
+}
+function ImportAds({ clients, onClose, onDone }) {
+  const [res, setRes] = useState(null), [busy, setBusy] = useState(false), [done, setDone] = useState(0);
+  const onFile = (file) => {
+    if (!file) return;
+    if (!/\.(csv|txt)$/i.test(file.name)) { toast("Choose a CSV file. In Excel: File > Save As > CSV."); return; }
+    const r = new FileReader();
+    r.onload = () => setRes(readAdsCsv(String(r.result), clients));
+    r.readAsText(file);
+  };
+  const run = async () => {
+    setBusy(true); setDone(0);
+    let ok = 0; const fails = [];
+    for (const x of res.list) {
+      try {
+        await api("/ads", { method: "POST", body: { import: true, client: x.client, date: x.date, platform: x.platform, campaign: x.campaign, spend: x.spend, clicks: x.clicks, impr: x.impr, conv: x.conv, ctr: x.ctr, cpc: x.cpc, campaigns: x.campaigns, sent: x.sent } });
+        ok++;
+      } catch (ex) { fails.push(`${x.clientName} ${x.date}: ${ex.message}`); }
+      setDone(d => d + 1);
+    }
+    setBusy(false);
+    toast(`${ok} report${ok === 1 ? "" : "s"} imported${fails.length ? `, ${fails.length} failed` : ""}`);
+    if (fails.length) setRes(r => ({ ...r, list: r.list.filter(x => fails.some(f => f.startsWith(`${x.clientName} ${x.date}:`))), errs: fails }));
+    onDone(fails.length > 0);   // reload the list; close when everything was saved
+  };
+  const sample = () => downloadCsv("ads-reports-import-sample.csv", [
+    ["Date", "Client", "Platform", "Campaign", "Impressions", "Clicks", "CTR %", "Cost (Rs)", "CPC (Rs)", "Conversions", "Sent to client"],
+    [today(), clients[0]?.name || "Client name", "Google Ads", "Leads-Search", 500, 40, "", 800, "", 2, "No"],
+    [today(), clients[0]?.name || "Client name", "Meta Ads", "Leads-Instagram", 2000, 60, "", 500, "", 3, "No"],
+  ]);
+  return (
+    <Modal wide title="Import ads reports" onClose={busy ? () => {} : onClose}>
+      <p className="sub" style={{ marginTop: 0 }}>Upload a CSV with the same columns as Export: Date, Client, Platform, Campaign, Impressions, Clicks, CTR %, Cost (Rs), CPC (Rs), Conversions, Sent to client. Several campaigns for the same client and day are saved as one report. A report already saved for that client and day gets these numbers; its search terms stay.</p>
+      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+        <input type="file" accept=".csv,text/csv,.txt" onChange={e => onFile(e.target.files[0])} disabled={busy} />
+        <button type="button" className="btn sm" onClick={sample}>Download a sample</button>
+      </div>
+      {res && (
+        <div style={{ marginTop: 14 }}>
+          {res.errs.length > 0 && <div className="imp-err"><b>{res.errs.length} row{res.errs.length === 1 ? "" : "s"} skipped</b><ul>{res.errs.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}</ul>{res.errs.length > 20 && <span className="sub">+ {res.errs.length - 20} more</span>}</div>}
+          {res.list.length > 0 ? (
+            <>
+              <div className="ar-tw" style={{ maxHeight: 320, overflow: "auto", marginTop: 10 }}><table>
+                <thead><tr><th>Date</th><th>Client</th><th>Platform</th><th>Campaigns</th><th style={{ textAlign: "right" }}>Impressions</th><th style={{ textAlign: "right" }}>Clicks</th><th style={{ textAlign: "right" }}>Cost</th><th style={{ textAlign: "right" }}>Conversions</th><th>Sent</th></tr></thead>
+                <tbody>{res.list.map((x, i) => (
+                  <tr key={i}><td>{fdw(x.date)}</td><td>{x.clientName}</td><td>{x.platform === "meta" ? "Meta Ads" : "Google Ads"}</td><td className="ar-camp" title={x.campaign}>{x.campaign || "-"}</td>
+                    <td style={{ textAlign: "right" }}>{x.impr.toLocaleString("en-IN")}</td><td style={{ textAlign: "right" }}>{x.clicks.toLocaleString("en-IN")}</td><td style={{ textAlign: "right" }}>{rs(x.spend)}</td><td style={{ textAlign: "right" }}>{x.conv}</td><td>{x.sent ? "Yes" : "No"}</td></tr>
+                ))}</tbody>
+              </table></div>
+              <div className="row" style={{ marginTop: 12, justifyContent: "flex-end", gap: 10 }}>
+                {busy && <span className="sub">Saving {done} of {res.list.length}…</span>}
+                <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+                <button type="button" className="btn p" onClick={run} disabled={busy}>{busy ? "Importing…" : `Import ${res.list.length} report${res.list.length === 1 ? "" : "s"}`}</button>
+              </div>
+            </>
+          ) : <div className="empty">Nothing to import.</div>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 const wasted = (terms, spend) => terms.filter(t => t.conv === 0 && t.cost >= Math.max(150, spend * 0.05));
 
 // Every saved report (Google and Meta), by day, with filters and an Excel export
 function SavedAds({ clients, reload }) {
   const [from, setFrom] = useState(T(-29)), [to, setTo] = useState(today());
+  const [imp, setImp] = useState(false), [rn, setRn] = useState(0);
   const [cid, setCid] = useState(""), [pl, setPl] = useState(""), [q, setQ] = useState("");
   const [page, setPage] = useState(0), [per, setPer] = useState(10);
   const [L, setL] = useState(null);
@@ -150,7 +269,7 @@ function SavedAds({ clients, reload }) {
     let live = true;
     api(`/ads/all?from=${from}&to=${to}`).then(j => live && setL(j.data.list), e => { if (live) { toast(e.message); setL([]); } });
     return () => { live = false; };
-  }, [from, to, reload]);
+  }, [from, to, reload, rn]);
   const hasG = (r) => !r.meta || r.spend || r.clicks || r.impr || r.conv;
   const ctrOf = (m) => (m.ctr != null ? +m.ctr : m.impr ? (m.clicks / m.impr) * 100 : 0);
   const cpcOf = (m) => (m.cpc != null ? +m.cpc : m.clicks ? m.spend / m.clicks : 0);
@@ -177,8 +296,12 @@ function SavedAds({ clients, reload }) {
         <label className="ar-f"><span>Client</span><select value={cid} onChange={f(setCid)}><option value="">All clients</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="ar-f"><span>Platform</span><select value={pl} onChange={f(setPl)}><option value="">Google and Meta</option><option>Google Ads</option><option>Meta Ads</option></select></label>
         <label className="ar-f ar-q"><span>Search</span><input type="search" value={q} onChange={f(setQ)} placeholder="Client or campaign" /></label>
-        <button type="button" className="btn p ar-exp" disabled={!rows.length} onClick={exportCsv} title="Downloads the reports matching these filters">Export {rows.length ? `(${rows.length})` : ""}</button>
+        <span className="ar-btns">
+          <button type="button" className="btn ar-exp" onClick={() => setImp(true)} title="Add reports from a CSV file">Import</button>
+          <button type="button" className="btn p ar-exp" disabled={!rows.length} onClick={exportCsv} title="Downloads the reports matching these filters">Export {rows.length ? `(${rows.length})` : ""}</button>
+        </span>
       </div>
+      {imp && <ImportAds clients={clients} onClose={() => setImp(false)} onDone={(more) => { setRn(n => n + 1); if (!more) setImp(false); }} />}
       {rows.length > 0 && <div className="ar-sum"><span><small>Cost</small><b>{rs(sum.spend)}</b></span><span><small>Impressions</small><b>{sum.impr.toLocaleString("en-IN")}</b></span><span><small>Clicks</small><b>{sum.clicks.toLocaleString("en-IN")}</b></span><span><small>CTR</small><b>{sum.impr ? ((sum.clicks / sum.impr) * 100).toFixed(2) : "0.00"}%</b></span><span><small>Conversions</small><b>{sum.conv}</b></span><span><small>Cost per conversion</small><b>{sum.conv ? rs(sum.spend / sum.conv) : "-"}</b></span></div>}
       {L == null ? <div className="empty">Loading…</div> : !rows.length ? <div className="empty">No reports for these filters.</div> : (<>
         <div className="ar-tw"><table>
