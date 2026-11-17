@@ -37,22 +37,30 @@ export function EntryLi({ e, onDelete, onEdit }) {
 // Fix a logged entry: what was done, the link, the keyword, the hours and the day
 function EditEntry({ e, onClose }) {
   const P = usePortal();
-  const [f, setF] = useState({ title: e.title || "", url: e.url || "", kw: e.meta?.kw || "", hrs: String(e.hrs ?? ""), date: e.date });
+  const [f, setF] = useState({ type: e.type, title: e.title || "", url: e.url || "", kw: e.meta?.kw || "", hrs: String(e.hrs ?? ""), date: e.date });
+  // the kinds of work this person can log (bugs, meetings and ads reports have their own screens)
+  const kinds = typesFor(rolesOf(P.session.user)).filter(([k]) => !["bug", "meeting", "adsreport"].includes(k));
+  if (!kinds.some(([k]) => k === e.type)) kinds.unshift([e.type, TY[e.type] || { l: e.type }]);
   const [busy, setBusy] = useState(false);
-  const hasKw = e.meta?.kw !== undefined || ["blog", "blogpub", "landing", "backlink", "gmb"].includes(e.type);
+  const hasKw = e.meta?.kw !== undefined || ["blog", "blogcontent", "blogpub", "landing", "backlink", "gmb"].includes(f.type);
   const set = (k) => (ev) => setF(s => ({ ...s, [k]: ev.target.value }));
   const save = async (ev) => {
     ev.preventDefault();
     if (!f.title.trim() && !f.url.trim()) { toast("Add a title or link"); return; }
     setBusy(true);
-    const body = { title: f.title, url: f.url, hrs: Number(f.hrs) || 0, date: f.date, ...(hasKw ? { kw: f.kw } : {}) };
+    const body = { type: f.type, title: f.title, url: f.url, hrs: Number(f.hrs) || 0, date: f.date, ...(hasKw ? { kw: f.kw } : {}) };
     const r = await P.editEntry(e._id, body);
     setBusy(false);
     if (r) onClose();
   };
   return (
-    <Modal title={`Edit · ${TY[e.type]?.l || e.type}`} onClose={onClose}>
+    <Modal title="Edit work entry" onClose={onClose}>
       <form onSubmit={save}>
+        <div className="f"><label htmlFor="ee0">Kind of work</label>
+          <select id="ee0" value={f.type} onChange={set("type")}>
+            {kinds.map(([k, t]) => <option key={k} value={k}>{t.l || k}</option>)}
+          </select>
+        </div>
         <div className="f"><label htmlFor="ee1">What you did</label><textarea id="ee1" rows={2} value={f.title} onChange={set("title")} autoFocus /></div>
         <div className="f"><label htmlFor="ee2">Link</label><input id="ee2" type="url" value={f.url} onChange={set("url")} placeholder="https://" /></div>
         {hasKw && <div className="f"><label htmlFor="ee3">Keyword</label><input id="ee3" type="text" value={f.kw} onChange={set("kw")} /></div>}
