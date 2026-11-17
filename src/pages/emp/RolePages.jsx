@@ -880,7 +880,12 @@ function Bugs() {
   const B = useGet("/bugs");
   const Act = useGet("/bugs/activity");
   const [viewId, setViewId] = useState(null);
-  const all = (B.data || []).slice().sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  // the same project typed two ways ("RentAngadi", "Rent Angadi") is one project: use the name most bugs have
+  const pkey = (n) => String(n || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const pname = {};
+  (B.data || []).forEach(b => { if (b.refName) { const k = pkey(b.refName); (pname[k] ||= {})[b.refName] = (pname[k][b.refName] || 0) + 1; } });
+  const pOne = (n) => { const g = pname[pkey(n)]; return g ? Object.entries(g).sort((x, y) => y[1] - x[1])[0][0] : n; };
+  const all = (B.data || []).map(b => (b.refName ? { ...b, refName: pOne(b.refName) } : b)).sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1) || String(b.createdAt).localeCompare(String(a.createdAt)));
   const view = all.find(b => b._id === viewId) || Act.data?.bugs.find(b => b._id === viewId) || null;
   const reload = B.reload, reloadAct = Act.reload;
   // Keep the open bug and the counts fresh while the page is open
