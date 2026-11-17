@@ -37,7 +37,7 @@ export function EntryLi({ e, onDelete, onEdit }) {
 // Fix a logged entry: what was done, the link, the keyword, the hours and the day
 function EditEntry({ e, onClose }) {
   const P = usePortal();
-  const [f, setF] = useState({ type: e.type, title: e.title || "", url: e.url || "", kw: e.meta?.kw || "", hrs: String(e.hrs ?? ""), date: e.date });
+  const [f, setF] = useState({ count: String(e.meta?.count || 1), type: e.type, title: e.title || "", url: e.url || "", kw: e.meta?.kw || "", hrs: String(e.hrs ?? ""), date: e.date });
   // the kinds of work this person can log (bugs, meetings and ads reports have their own screens)
   const kinds = typesFor(rolesOf(P.session.user)).filter(([k]) => !["bug", "meeting", "adsreport"].includes(k));
   if (!kinds.some(([k]) => k === e.type)) kinds.unshift([e.type, TY[e.type] || { l: e.type }]);
@@ -48,7 +48,7 @@ function EditEntry({ e, onClose }) {
     ev.preventDefault();
     if (!f.title.trim() && !f.url.trim()) { toast("Add a title or link"); return; }
     setBusy(true);
-    const body = { type: f.type, title: f.title, url: f.url, hrs: Number(f.hrs) || 0, date: f.date, ...(hasKw ? { kw: f.kw } : {}) };
+    const body = { ...(f.type === "backlink" ? { count: Math.max(1, parseInt(f.count, 10) || 1) } : {}), type: f.type, title: f.title, url: f.url, hrs: Number(f.hrs) || 0, date: f.date, ...(hasKw ? { kw: f.kw } : {}) };
     const r = await P.editEntry(e._id, body);
     setBusy(false);
     if (r) onClose();
@@ -64,6 +64,7 @@ function EditEntry({ e, onClose }) {
         <div className="f"><label htmlFor="ee1">What you did</label><textarea id="ee1" rows={2} value={f.title} onChange={set("title")} autoFocus /></div>
         <div className="f"><label htmlFor="ee2">Link</label><input id="ee2" type="url" value={f.url} onChange={set("url")} placeholder="https://" /></div>
         {hasKw && <div className="f"><label htmlFor="ee3">Keyword</label><input id="ee3" type="text" value={f.kw} onChange={set("kw")} /></div>}
+        {f.type === "backlink" && <div className="f"><label htmlFor="ee6">How many backlinks in this link (a Google Sheet with 5 backlinks = 5)</label><input id="ee6" type="number" min="1" max="200" value={f.count} onChange={set("count")} /></div>}
         <div className="g2">
           <div className="f"><label htmlFor="ee4">Hours</label><input id="ee4" type="number" min="0" max="24" step="0.1" value={f.hrs} onChange={set("hrs")} /></div>
           <div className="f"><label htmlFor="ee5">Day</label><input id="ee5" type="date" max={today()} value={f.date} onChange={set("date")} required /></div>
@@ -344,6 +345,10 @@ function Fields({ type, devs }) {
     case "backlink": return (<>
       <Area name="urls" label="Backlink URLs, one per line" rows={5} required placeholder="https://medium.com/@nnc/destination-wedding-guide" />
       <div className="g3"><Inp name="kw" label="Keyword targeted" /><Sel name="btype" label="Type" opts={["Guest post", "Directory listing", "Business profile", "Article submission", "Social bookmark", "Image submission", "Press release"]} /><Inp name="da" label="Domain authority (DA)" type="number" min="0" max="100" placeholder="45" /></div>
+      <div style={{ maxWidth: 460 }}>
+        <Inp name="cnt" label="Pasted a Google Sheet or Excel link? How many backlinks are in it" type="number" min="1" max="200" placeholder="1" />
+        <span className="sub">Eg. a sheet with 5 backlinks counts as 5. Leave empty for normal links.</span>
+      </div>
     </>);
     case "blog": return (<><Inp name="title" label="Blog title" /><Inp name="url" label="Live blog link" type="url" placeholder="https://" /><span className="sub lw-one">Fill the title or the link. One is enough.</span><Inp name="kw" label="Keyword targeted" /></>);
     case "gmb": return (<><Inp name="title" label="Post headline" /><Inp name="url" label="Post link" placeholder="g.page/..." /><span className="sub lw-one">Fill the headline or the link. One is enough.</span><div className="g2"><Sel name="gtype" label="Post type" opts={["Update", "Offer", "Event", "Photo"]} /><Inp name="kw" label="Keyword" /></div></>);
@@ -495,7 +500,13 @@ export function LogWork() {
     const url = (u) => (u ? (/^https?:/.test(u) ? u : `https://${u}`) : "");
     let items;
     if (type === "backlink") {
-      items = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean).map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u), meta }));
+      const U = d.urls.split(/\s*\n\s*/).map(x => x.trim()).filter(Boolean);
+      // a sheet / doc / Excel link that lists many backlinks counts as that many
+      const n = Math.min(200, Math.max(1, parseInt(d.cnt, 10) || 1));
+      const isSheet = (u) => /docs\.google\.com|drive\.google\.com|\.xlsx?(\?|$)|\.csv(\?|$)|sharepoint\.com|1drv\.ms/i.test(u);
+      const sheetN = U.filter(isSheet).length;
+      items = U.map(u => ({ title: `${d.btype} on ${u.replace(/^https?:\/\//, "").split("/")[0]}`, url: url(u),
+        meta: n > 1 && (isSheet(u) || (!sheetN && U.length === 1)) ? { ...meta, count: n } : meta }));
     } else {
       const name = (t) => (type === "gmb" ? (t ? `${d.gtype} post: ${t}` : `${d.gtype} post`) : ["campaign", "metaads"].includes(type) ? `${d.camp}: ${t}` : type === "tracking" ? `${meta.tools} setup: ${t}` : t);
       items = type === "negative" ? [{ title: "Added negative keywords", url: url(d.url), meta }] : (titles.length ? titles : [""]).map(t => ({ title: name(t), url: url(d.url), meta }));
@@ -517,7 +528,7 @@ export function LogWork() {
     let saved = 0;
     try {
       for (const w of W) { await api("/work", { method: "POST", body: { type, date, refType: refType || "", refId: refId || "", hrs: w.hrs, items: w.items } }); saved++; }
-      const n = W.reduce((a, w) => a + w.items.length, 0);
+      const n = W.reduce((a, w) => a + w.items.reduce((s, it) => s + (it.meta?.count || 1), 0), 0);
       toast(type === "backlink" ? `${n} backlink${n > 1 ? "s" : ""} saved` : type === "bug" ? (saved > 1 ? `${saved} bugs sent to the developers` : "Bug sent to the developer") : saved > 1 ? `${saved} pieces of work saved` : `${TY[type].l} saved`);
       setType(""); setBlocks([{ id: 1, proof: [] }]);
     } catch (ex) {
@@ -724,7 +735,7 @@ export function MyHistory() {
   const L = P.entries.filter(e => e.date >= a && e.date <= b);
   const hrs = L.reduce((s, e) => s + (e.hrs || 0), 0), wd = workdays(a, b > today() ? today() : b);
   const sub = P.days.filter(d => d.date >= a && d.date <= b).length;
-  const byT = {}; L.forEach(e => { byT[e.type] = (byT[e.type] || 0) + 1; });
+  const byT = {}; L.forEach(e => { byT[e.type] = (byT[e.type] || 0) + (e.meta?.count || 1); });
   const dates = [...new Set(L.map(e => e.date))].sort().reverse();
   return (
     <>

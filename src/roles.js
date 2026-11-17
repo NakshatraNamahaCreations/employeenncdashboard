@@ -107,6 +107,7 @@ export const initials = (n) => String(n || "?").split(/\s+/).filter(Boolean).map
 // One line describing the extra details logged with a piece of work
 export function metaTxt(e) {
   const m = e.meta || {}, out = [];
+  if (m.count > 1) out.push(`${m.count} backlinks`);
   if (m.kw) out.push(`keyword: ${m.kw}`); if (m.da) out.push(`DA ${m.da}`); if (m.words) out.push(`${m.words} words`);
   if (m.camp) out.push(m.camp); if (m.platform) out.push(m.platform); if (m.screens) out.push(`${m.screens} screen${m.screens > 1 ? "s" : ""}`);
   if (m.ver) out.push(`v${m.ver}`); if (m.pass != null) out.push(`${m.pass} passed, ${m.fail} failed`);
