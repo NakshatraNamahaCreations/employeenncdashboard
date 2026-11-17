@@ -17,7 +17,7 @@ import { today, T, fd, fdw, h1, pct, weekStart, monthStart, greet, parse, iso, D
 
 /* ───────── shared bits ───────── */
 
-export function EntryLi({ e, onDelete }) {
+export function EntryLi({ e, onDelete, onEdit }) {
   return (
     <div className="li">
       <div className="x">
@@ -28,8 +28,44 @@ export function EntryLi({ e, onDelete }) {
         {e.meta?.files?.length > 0 && <span className="lw-files">{e.meta.files.map(f => <a key={f.url} className="lw-file" href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a>)}</span>}
       </div>
       <span className="sub" style={{ whiteSpace: "nowrap" }}>{h1(e.hrs)} h</span>
+      {onEdit && <button type="button" className="btn sm" onClick={() => onEdit(e)}>Edit</button>}
       {onDelete && <button type="button" className="btn sm" onClick={() => onDelete(e._id)}>Delete</button>}
     </div>
+  );
+}
+
+// Fix a logged entry: what was done, the link, the keyword, the hours and the day
+function EditEntry({ e, onClose }) {
+  const P = usePortal();
+  const [f, setF] = useState({ title: e.title || "", url: e.url || "", kw: e.meta?.kw || "", hrs: String(e.hrs ?? ""), date: e.date });
+  const [busy, setBusy] = useState(false);
+  const hasKw = e.meta?.kw !== undefined || ["blog", "blogpub", "landing", "backlink", "gmb"].includes(e.type);
+  const set = (k) => (ev) => setF(s => ({ ...s, [k]: ev.target.value }));
+  const save = async (ev) => {
+    ev.preventDefault();
+    if (!f.title.trim() && !f.url.trim()) { toast("Add a title or link"); return; }
+    setBusy(true);
+    const body = { title: f.title, url: f.url, hrs: Number(f.hrs) || 0, date: f.date, ...(hasKw ? { kw: f.kw } : {}) };
+    const r = await P.editEntry(e._id, body);
+    setBusy(false);
+    if (r) onClose();
+  };
+  return (
+    <Modal title={`Edit · ${TY[e.type]?.l || e.type}`} onClose={onClose}>
+      <form onSubmit={save}>
+        <div className="f"><label htmlFor="ee1">What you did</label><textarea id="ee1" rows={2} value={f.title} onChange={set("title")} autoFocus /></div>
+        <div className="f"><label htmlFor="ee2">Link</label><input id="ee2" type="url" value={f.url} onChange={set("url")} placeholder="https://" /></div>
+        {hasKw && <div className="f"><label htmlFor="ee3">Keyword</label><input id="ee3" type="text" value={f.kw} onChange={set("kw")} /></div>}
+        <div className="g2">
+          <div className="f"><label htmlFor="ee4">Hours</label><input id="ee4" type="number" min="0" max="24" step="0.1" value={f.hrs} onChange={set("hrs")} /></div>
+          <div className="f"><label htmlFor="ee5">Day</label><input id="ee5" type="date" max={today()} value={f.date} onChange={set("date")} required /></div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+          <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="btn p" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -675,6 +711,7 @@ const workdays = (a, b) => { let n = 0; const x = parse(a); while (iso(x) <= b) 
 export function MyHistory() {
   const P = usePortal();
   const [hp, setHp] = useState("week");
+  const [editing, setEditing] = useState(null);
   const [a, b] = hPeriod(hp);
   const L = P.entries.filter(e => e.date >= a && e.date <= b);
   const hrs = L.reduce((s, e) => s + (e.hrs || 0), 0), wd = workdays(a, b > today() ? today() : b);
@@ -704,12 +741,13 @@ export function MyHistory() {
                 <span className="x">{fdw(d)}</span><span>{h1(D.reduce((s, e) => s + (e.hrs || 0), 0))} h</span>
                 {r ? <span className="pill p-ok">Submitted {ampm(r.at)}</span> : d === today() ? <span className="pill p-amb">Open</span> : <span className="pill p-red">Not submitted</span>}
               </div>
-              {D.map(e => <EntryLi key={e._id} e={e} />)}
+              {D.map(e => <EntryLi key={e._id} e={e} onEdit={["bug", "meeting", "adsreport"].includes(e.type) ? null : setEditing} />)}
               {r && (r.note || r.plan) && <div className="li"><div className="x sub">{r.note ? `Note: ${r.note}` : ""}{r.plan ? ` · Tomorrow: ${r.plan}` : ""}</div></div>}
             </div>
           );
         }) : <div className="empty">Nothing logged in this period.</div>}
       </section>
+      {editing && <EditEntry e={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }

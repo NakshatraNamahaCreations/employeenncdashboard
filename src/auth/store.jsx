@@ -85,6 +85,7 @@ export function PortalProvider({ children }) {
     session, signIn, signOut, refresh, loading, run, ...data, notif, loadNotifs, readNotifs,
     addWork: (body, ok) => run(() => api("/work", { method: "POST", body }), ok),
     removeEntry: (id) => run(() => api(`/work/${id}`, { method: "DELETE" }), "Entry deleted"),
+    editEntry: (id, body) => run(() => api(`/work/${id}`, { method: "PATCH", body }), "Entry updated"),
     addTask: (t) => run(() => api("/tasks", { method: "POST", body: t }), "Task added"),
     setTaskStatus: (id, status) => run(() => api(`/tasks/${id}`, { method: "PATCH", body: { status } }), status === "done" ? "Task done" : "Task started"),
     addBlocker: (b) => run(() => api("/blockers", { method: "POST", body: { ...b, date: today() } }), "Sent to Harish"),
