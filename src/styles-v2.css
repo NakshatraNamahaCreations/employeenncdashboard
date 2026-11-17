@@ -1041,3 +1041,43 @@ aside.nav .brand { letter-spacing: -0.01em; }
 .ar-btns { display: flex; gap: 8px; }
 .imp-err { background: #FEF3F2; border: 1px solid #FECDCA; color: #B42318; border-radius: 10px; padding: 10px 14px; font-size: 13px; }
 .imp-err ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* Plans for today: edit, long text, cleaner rows */
+.tp-bar { height: 5px; background: #EEF2F7; border-radius: 4px; overflow: hidden; margin: 0 16px 6px; }
+.tp-bar i { display: block; height: 100%; background: #16A34A; transition: width .2s; }
+.tp-list { display: grid; }
+.tp .tp-i { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.tp .tp-i:hover { background: #FAFBFC; }
+.tp .tp-i > input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: #16A34A; flex: none; cursor: pointer; }
+.tp-n { color: var(--mut); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 18px; padding-top: 1px; }
+.tp-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.tp-txt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; color: var(--navy); }
+.tp-i.done .tp-txt { text-decoration: line-through; color: var(--mut); }
+.tp-ref { justify-self: start; background: #EEF4FF; color: #1D4ED8; border-radius: 99px; padding: 2px 9px; font-size: 12px; }
+.tp-act { display: flex; gap: 4px; flex: none; opacity: .75; }
+.tp .tp-i:hover .tp-act { opacity: 1; }
+.tp-ib { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: #fff; color: #475569; border-radius: 8px; cursor: pointer; }
+.tp-ib:hover { background: #F1F5F9; color: var(--navy); }
+.tp-ib.danger:hover { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
+.tp-edit { flex-direction: column; align-items: stretch !important; background: #F8FAFF; }
+.tp textarea { width: 100%; border: 1px solid #D0D5DD; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.5; resize: none; overflow: hidden; min-height: 44px; background: #fff; color: var(--navy); }
+.tp textarea:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
+.tp-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tp-f .sp { flex: 1; }
+.tp-f select { border: 1px solid #D0D5DD; border-radius: 9px; padding: 0 10px; height: 36px; font: inherit; font-size: 13.5px; background: #fff; max-width: 260px; }
+.tp .tp-add { display: grid; gap: 8px; padding: 14px 16px; border-top: 0; }
+
+/* inputs written without a type look the same as text boxes */
+input:not([type]) { border: 1px solid #D0D5DD; border-radius: 9px; padding: 9px 12px; background: #fff; width: 100%; font: inherit; font-size: 14px; color: var(--navy); box-shadow: 0 1px 2px rgba(16, 24, 40, .03); }
+
+/* My documents: import form */
+.md-form-b { align-items: stretch; gap: 20px; padding: 18px; }
+.md-drop { display: flex; }
+.md-drop > * { flex: 1; }
+.md-drop .fp-zone { min-height: 230px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; }
+.md-fields { display: grid; gap: 2px; align-content: start; }
+.md-fields .f label { font-size: 13px; font-weight: 600; color: #344054; margin-bottom: 6px; display: block; }
+.md-fields input, .md-fields textarea { height: auto; min-height: 42px; }
+.md-fields textarea { min-height: 76px; resize: vertical; }
+.md-save { height: 44px; margin-top: 4px; }
+.md-bar { gap: 10px; padding: 14px 16px; }

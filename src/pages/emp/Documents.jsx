@@ -295,11 +295,11 @@ function MyDocs({ assigned }) {
             <div className="g2">
               <div className="f"><label htmlFor="md-d">Date</label><input id="md-d" type="date" value={f.date} max={todayStr()} onChange={set("date")} required /></div>
               <div className="f"><label htmlFor="md-r">Project or client</label>
-                <input id="md-r" list="md-refs" value={f.refName} onChange={set("refName")} placeholder="Optional" />
+                <input id="md-r" type="text" list="md-refs" value={f.refName} onChange={set("refName")} placeholder="Optional" />
                 <datalist id="md-refs">{refs.map(r => <option key={r} value={r} />)}</datalist></div>
             </div>
-            <div className="f"><label htmlFor="md-t">Title</label><input id="md-t" value={f.title} onChange={set("title")} placeholder="Optional. The file name is used if empty" /></div>
-            <div className="f"><label htmlFor="md-n">Note</label><input id="md-n" value={f.note} onChange={set("note")} placeholder="Optional" /></div>
+            <div className="f"><label htmlFor="md-t">Title</label><input id="md-t" type="text" value={f.title} onChange={set("title")} placeholder="Optional. The file name is used if empty" /></div>
+            <div className="f"><label htmlFor="md-n">Note</label><textarea id="md-n" rows={3} value={f.note} onChange={set("note")} placeholder="Optional. What this document is about" /></div>
             <button type="submit" className="btn p lg md-save" disabled={busy}><Upload size={16} /> {busy ? "Saving…" : "Save document"}</button>
           </div>
         </form>
