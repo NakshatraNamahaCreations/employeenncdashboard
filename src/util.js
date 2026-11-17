@@ -8,6 +8,9 @@ export const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 export const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const fd = (s) => { const d = parse(s); return `${d.getDate()} ${MON[d.getMonth()]}`; };
 export const fdw = (s) => `${DOW[parse(s).getDay()]}, ${fd(s)}`;
+// day/month/year: "17/11/2026" and "Tue, 17/11/2026" (also takes a full date-time string)
+export const fdy = (s) => { const d = String(s || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : ""; };
+export const fdwy = (s) => { const y = fdy(s); return y ? `${DOW[parse(String(s).slice(0, 10)).getDay()]}, ${y}` : ""; };
 export const h1 = (n) => Math.round(n * 10) / 10;
 export const pct = (a, b) => (b ? Math.max(0, Math.min(100, Math.round((a / b) * 100))) : 0);
 export const weekStart = (s = today()) => { const d = parse(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); };

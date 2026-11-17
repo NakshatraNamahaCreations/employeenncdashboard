@@ -1096,3 +1096,12 @@ input:not([type]) { border: 1px solid #D0D5DD; border-radius: 9px; padding: 9px 
 .bp-t th.c-blue, .bp-t td.c-blue { color: #1D4ED8; }
 .bp-t th.c-ok, .bp-t td.c-ok { color: #067647; }
 .bg-id { white-space: nowrap; }
+
+/* date box that reads day/month/year */
+.dmy { position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 150px; padding: 9px 12px; border: 1px solid var(--line, #D0D5DD); border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #101828; }
+.f .dmy { display: flex; width: 100%; box-sizing: border-box; }
+.dmy .dmy-v { flex: 1; font-variant-numeric: tabular-nums; }
+.dmy .dmy-v.ph { color: #98A2B3; }
+.dmy .dmy-i { color: #667085; flex: none; }
+.dmy input[type="date"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; }
+.dmy:focus-within { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }

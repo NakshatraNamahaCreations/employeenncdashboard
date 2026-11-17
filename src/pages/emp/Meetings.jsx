@@ -6,7 +6,8 @@ import { api, upload, fileUrl } from "../../api";
 import { roleInfo } from "../../roles";
 import { toast } from "../../toast";
 import { confirmBox } from "../../confirm";
-import { today, fd, fdw, ampm, greet, nowHM } from "../../util";
+import { today, fdy as fd, fdwy as fdw, ampm, greet, nowHM } from "../../util";
+import DateDMY from "../../DateDMY";
 
 // The meeting's time has come (today with no time, or the time has passed): its MOM points can be added
 const isOver = (m) => !!m && (m.date < today() || (m.date === today() && !!m.time && m.time <= nowHM()));
@@ -73,7 +74,7 @@ function SendLi({ l, m, onOpen }) {
     <div className="li">
       <span className={`mt-via ${l.via}`}>{l.via === "email" ? <Mail size={14} /> : <MessageCircle size={14} />}</span>
       <div className="x"><b>{m ? m.title : l.via === "email" ? "Emailed" : "Sent on WhatsApp"}</b>
-        <span className="sub">{[m && (l.via === "email" ? "Email" : "WhatsApp"), l.to ? `to ${l.to}` : "", new Date(l.at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })].filter(Boolean).join(" · ")}</span></div>
+        <span className="sub">{[m && (l.via === "email" ? "Email" : "WhatsApp"), l.to ? `to ${l.to}` : "", new Date(l.at).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })].filter(Boolean).join(" · ")}</span></div>
       {onOpen && <button type="button" className="btn sm" onClick={onOpen}>Open</button>}
     </div>
   );
@@ -276,7 +277,7 @@ export default function Meetings() {
               <datalist id="m1l">{[...P.assigned.clients, ...P.assigned.projects].map(r => <option key={r.id} value={r.name} />)}</datalist></div>
             <div className="f"><label htmlFor="m2">Meeting about</label><input id="m2" name="title" type="text" required defaultValue={m?.title || ""} placeholder="UAT walkthrough, design review, monthly report..." /></div>
             <div className="g3">
-              <div className="f"><label htmlFor="m3">Date</label><input id="m3" name="date" type="date" required defaultValue={m?.date || newDate || today()} /></div>
+              <div className="f"><label htmlFor="m3">Date</label><DateDMY key={m?._id || newDate || "new"} id="m3" name="date" required defaultValue={m?.date || newDate || today()} /></div>
               <div className="f"><label htmlFor="m4">Time</label><input id="m4" name="time" type="time" defaultValue={m?.time || ""} /></div>
               <div className="f"><label htmlFor="m5">Duration</label>
                 <div className="dur">

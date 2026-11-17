@@ -546,7 +546,6 @@ function Designs() {
 }
 
 /* ───────── Developers and testers: bugs ───────── */
-const SEV = { High: 0, Medium: 1, Low: 2 };
 const ST = {
   open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progress: ["In progress", "p-amb"], info: ["Needs more info", "p-amb"],
   fixed: ["Fixed, to verify", "p-blue"], notbug: ["Not a bug", "p-gr"], verified: ["Verified", "p-ok"],
@@ -885,7 +884,7 @@ function Bugs() {
   const pname = {};
   (B.data || []).forEach(b => { if (b.refName) { const k = pkey(b.refName); (pname[k] ||= {})[b.refName] = (pname[k][b.refName] || 0) + 1; } });
   const pOne = (n) => { const g = pname[pkey(n)]; return g ? Object.entries(g).sort((x, y) => y[1] - x[1])[0][0] : n; };
-  const all = (B.data || []).map(b => (b.refName ? { ...b, refName: pOne(b.refName) } : b)).sort((a, b) => (SEV[a.meta?.sev] ?? 1) - (SEV[b.meta?.sev] ?? 1) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const all = (B.data || []).map(b => (b.refName ? { ...b, refName: pOne(b.refName) } : b)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));   // newest bug first
   const view = all.find(b => b._id === viewId) || Act.data?.bugs.find(b => b._id === viewId) || null;
   const reload = B.reload, reloadAct = Act.reload;
   // Keep the open bug and the counts fresh while the page is open
