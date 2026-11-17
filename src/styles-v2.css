@@ -1081,3 +1081,18 @@ input:not([type]) { border: 1px solid #D0D5DD; border-radius: 9px; padding: 9px 
 .md-fields textarea { min-height: 76px; resize: vertical; }
 .md-save { height: 44px; margin-top: 4px; }
 .md-bar { gap: 10px; padding: 14px 16px; }
+
+/* Bugs: per project summary */
+.bp-card h3 small { font-weight: 400; }
+.bp-t { width: 100%; border-collapse: collapse; }
+.bp-t th, .bp-t td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13.5px; }
+.bp-t th.n, .bp-t td.n { text-align: right; font-variant-numeric: tabular-nums; width: 110px; }
+.bp-t td.r { text-align: right; width: 90px; }
+.bp-t tbody tr { cursor: pointer; }
+.bp-t tbody tr:hover td { background: #F8FAFC; }
+.bp-t tbody tr.on td { background: #EFF4FF; }
+.bp-t th.c-red, .bp-t td.c-red { color: #B42318; }
+.bp-t th.c-amb, .bp-t td.c-amb { color: #B54708; }
+.bp-t th.c-blue, .bp-t td.c-blue { color: #1D4ED8; }
+.bp-t th.c-ok, .bp-t td.c-ok { color: #067647; }
+.bg-id { white-space: nowrap; }

@@ -616,7 +616,7 @@ function BugCard({ b, tester, onOpen, onVerify }) {
   return (
     <div className={`bg-card sev-${String(m.sev || "Medium").toLowerCase()}${open ? " click" : ""}`} {...(open ? { role: "button", tabIndex: 0, onClick: open, onKeyDown: (e) => { if (e.key === "Enter") open(); } } : {})}>
       <div className="bg-main">
-        <div className="bg-top"><span className="bg-id">{m.bug}</span><b className="bg-title">{b.title}</b></div>
+        <div className="bg-top"><span className="bg-id" title={m.bug}>{b.no ? `Bug ${b.no}` : m.bug}</span><b className="bg-title">{b.title}</b></div>
         <div className="bg-meta">
           <span className={`bg-sev s-${String(m.sev || "Medium").toLowerCase()}`}>{m.sev || "Medium"}</span>
           {b.refName && <span><FolderKanban size={13} /> {b.refName}</span>}
@@ -686,7 +686,7 @@ function BugView({ bug, tester, onClose, act, onSeen }) {
     } else toast("Write a comment or change the status");
   };
   return (
-    <Modal title={`${m.bug} · ${bug.title}`} onClose={onClose}>
+    <Modal title={`${bug.no ? `Bug ${bug.no}${bug.refName ? ` of ${bug.refName}` : ""}` : m.bug} · ${bug.title}`} onClose={onClose}>
       <div className="bug-view">
         <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           {bugPill(m.status)}<SeenPill m={m} />{m.sev && <span className={`pill ${m.sev === "High" ? "p-red" : m.sev === "Low" ? "p-gr" : "p-amb"}`}>{m.sev}</span>}
@@ -893,9 +893,15 @@ function Bugs() {
   const projects = [...new Set(all.map(b => b.refName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const ql = q.trim().toLowerCase();
   const rg = rangeOf(dk, dFrom, dTo);
-  const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1]))
-    && (!ql || `${b.meta?.bug} ${b.title} ${b.meta?.steps} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql)));
   const fnOf = (k) => TABS.find(t => t[0] === k)[2];
+  const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1]))
+    && (!ql || (/^#?\d+$/.test(ql) ? String(b.no) === ql.replace("#", "") : `${b.meta?.bug} ${b.title} ${b.meta?.steps} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql))));
+  // every project with its bugs, by stage (date and severity filters apply, not the project filter)
+  const PS = projects.map(p => {
+    const L = all.filter(b => b.refName === p && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1])));
+    const c = (k) => L.filter(b => fnOf(k)(b.meta?.status)).length;
+    return { p, n: L.length, c };
+  }).filter(x => x.n);
   const cnt = (k) => base.filter(b => fnOf(k)(b.meta?.status)).length;
   const cur = TABS.find(t => t[0] === st) || TABS[0];
   const shown = base.filter(b => cur[2](b.meta?.status)).slice(0, st === "done" ? 40 : 300);
@@ -924,6 +930,22 @@ function Bugs() {
             ))}
           </div>
 
+          {PS.length > 0 && (
+            <section className="card bp-card">
+              <h3>Bugs by project <small>{PS.reduce((a, x) => a + x.n, 0)} bugs in {PS.length} project{PS.length === 1 ? "" : "s"} · click a project to see only its bugs</small></h3>
+              <div className="tw"><table className="bp-t">
+                <thead><tr><th>Project</th><th className="n">All bugs</th>{TABS.map(([k, l, , c]) => <th key={k} className={`n c-${c}`}>{l}</th>)}<th /></tr></thead>
+                <tbody>{PS.map(x => (
+                  <tr key={x.p} className={proj === x.p ? "on" : ""} onClick={() => setProj(proj === x.p ? "" : x.p)}>
+                    <td><b>{x.p}</b></td><td className="n"><b>{x.n}</b></td>
+                    {TABS.map(([k, , , c]) => <td key={k} className={`n c-${c}`}>{x.c(k) || "-"}</td>)}
+                    <td className="r">{proj === x.p ? <span className="pill p-blue">Showing</span> : <span className="sub">View</span>}</td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+            </section>
+          )}
+
           <div className="bg-filters">
             <select value={proj} onChange={e => setProj(e.target.value)} aria-label="Project">
               <option value="">All projects</option>
@@ -934,7 +956,7 @@ function Bugs() {
                 <button key={l} type="button" className={`${sev === k ? "on" : ""} ${k ? `s-${k.toLowerCase()}` : ""}`} onClick={() => setSev(k)}>{l}</button>
               ))}
             </div>
-            <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number, title or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
+            <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number (e.g. 3), title or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
             <select value={dk} onChange={e => setDk(e.target.value)} aria-label="Date raised" className={dk ? "on" : ""}>
               {DATES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
