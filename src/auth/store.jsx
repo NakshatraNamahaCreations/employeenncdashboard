@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 // Signed-in session and the employee's data, loaded from the backend (/api/portal).
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, readAuth, writeAuth, setOnExpired } from "../api";
 import { toast } from "../toast";
 import { T, today, nowHM } from "../util";
@@ -21,13 +21,21 @@ export function PortalProvider({ children }) {
   const [session, setSession] = useState(readAuth);
   const [data, setData] = useState(() => readCache(readAuth()));
   const [loading, setLoading] = useState(false);
-  const [attendance, setAttendance] = useState(null);   // today's check in / check out
+  const [attendance, setAttendanceRaw] = useState(null);   // today's check in / check out
+  // Every change to check in / check out bumps this. A load that started before the change
+  // must not put the old state back (that made the button flip until the page was refreshed).
+  const attVer = useRef(0);
+  const setAttendance = useCallback((a) => { attVer.current++; setAttendanceRaw(a); }, []);
+  const loadAttendance = useCallback(async () => {
+    const v = attVer.current;
+    try { const j = await api(`/attendance?date=${today()}`); if (v === attVer.current) setAttendanceRaw(j.data); } catch { /* shown on the next load */ }
+  }, []);
 
   const signIn = useCallback((s, remember = true) => { writeAuth(s, remember); setData(readCache(s)); setSession(s); }, []);
   const [notif, setNotif] = useState(NO_NOTIF);
   useRise(notif.unread, "notif");             // sound for a new notification
   useRise(notif.unreadMessages, "msg");       // and for a new message from the admin
-  const signOut = useCallback(() => { writeCache(readAuth(), null); writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setAttendance(null); setSession(null); }, []);
+  const signOut = useCallback(() => { writeCache(readAuth(), null); writeAuth(null); setData(EMPTY); setNotif(NO_NOTIF); setAttendance(null); setSession(null); }, [setAttendance]);
   useEffect(() => { setOnExpired(() => { signOut(); toast("Your session has ended. Please sign in again."); }); }, [signOut]);
 
   const isEmp = session?.type === "emp";
@@ -38,12 +46,11 @@ export function PortalProvider({ children }) {
     if (!isEmp) return;
     setLoading(true);
     try {
-      const [work, tasks, blockers, meetings, att, me, assigned] = await Promise.all([
+      loadAttendance();   // on its own, so the check in button is right straight away
+      const [work, tasks, blockers, meetings, me, assigned] = await Promise.all([
         api(`/work?from=${T(-70)}&to=${today()}`), api("/tasks"), api("/blockers"), api("/meetings"),
-        api(`/attendance?date=${today()}`).catch(() => null),
         full ? api("/me") : null, full ? api("/assigned") : null,
       ]);
-      if (att) setAttendance(att.data);
       if (me) setSession(s => { const n = { ...s, user: me.data }; writeAuth(n, !!localStorage.getItem("nnc-portal-auth")); return n; });
       setData(d => {
         const n = { entries: work.data.work, days: work.data.days, tasks: tasks.data, blockers: blockers.data, meetings: meetings.data, assigned: assigned ? assigned.data : d.assigned };
@@ -52,8 +59,15 @@ export function PortalProvider({ children }) {
       });
     } catch (err) { if (err.status !== 401) toast(err.message); }
     finally { setLoading(false); }
-  }, [isEmp]);
+  }, [isEmp, loadAttendance]);
   useEffect(() => { queueMicrotask(() => refresh(true)); }, [refresh, session?.token]);
+  // coming back to the tab: check in / out may have changed on another device or tab
+  useEffect(() => {
+    if (!isEmp) return;
+    const f = () => { if (document.visibilityState === "visible") loadAttendance(); };
+    document.addEventListener("visibilitychange", f);
+    return () => document.removeEventListener("visibilitychange", f);
+  }, [isEmp, loadAttendance]);
 
   // Bell notifications and unread admin messages, checked every 15 seconds
   const loadNotifs = useCallback(() => {
@@ -119,7 +133,7 @@ export function PortalProvider({ children }) {
         return true;
       } catch (err) { toast(err.message); return false; }
     },
-  }), [session, signIn, signOut, refresh, loading, run, data, notif, loadNotifs, readNotifs, attendance]);
+  }), [session, signIn, signOut, refresh, loading, run, data, notif, loadNotifs, readNotifs, attendance, setAttendance]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

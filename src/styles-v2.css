@@ -1105,3 +1105,9 @@ input:not([type]) { border: 1px solid #D0D5DD; border-radius: 9px; padding: 9px 
 .dmy .dmy-i { color: #667085; flex: none; }
 .dmy input[type="date"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; }
 .dmy:focus-within { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+
+/* Bug written in the testers' format */
+.bug-txt { display: grid; gap: 10px; margin: 8px 0; }
+.bug-sec h5 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: #64748B; }
+.bug-sec .bug-steps { margin: 0; }
+.sb-tip { display: block; margin-top: 2px; }

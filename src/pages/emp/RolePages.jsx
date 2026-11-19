@@ -608,6 +608,40 @@ function Files({ list }) {
   );
 }
 
+// The bug in the testers' format: Issue Description, Test Steps, Expected Result
+function BugText({ m }) {
+  const parts = [["Issue description", m.desc], [m.desc || m.exp ? "Test steps" : "", m.steps], ["Expected result", m.exp]].filter(([, t]) => t);
+  if (!parts.length) return null;
+  return (
+    <div className="bug-txt">
+      {parts.map(([h, t]) => (
+        <div key={h || "s"} className="bug-sec">{h && <h5>{h}</h5>}<p className="bug-steps"><Linkify text={t} /></p></div>
+      ))}
+    </div>
+  );
+}
+
+// Pasting a whole bug written as "Issue Title: ... Issue Description: ... Test Steps: ... Expected Result: ..."
+// fills the right boxes. Returns null when the text is not in that format.
+const LABELS = [["title", /(?:issue|test|bug)\s*title/], ["mod", /module(?:\s*(?:name|or screen))?/], ["desc", /(?:issue|test|bug)\s*description|description/],
+  ["steps", /(?:test\s*steps|steps\s*to\s*reproduce|steps)/], ["exp", /expected\s*result/], ["act", /actual\s*result/]];
+function splitBug(text) {
+  const re = new RegExp(`^[\\s\\-*•/]*(${LABELS.map(([, r]) => r.source).join("|")})\\s*[:\\-–]\\s*`, "gim");
+  const hits = [...text.matchAll(re)];
+  if (hits.length < 2) return null;
+  const out = {};
+  hits.forEach((h, i) => {
+    const key = LABELS.find(([, r]) => new RegExp(`^(?:${r.source})$`, "i").test(h[1].trim()))?.[0];
+    const body = text.slice(h.index + h[0].length, i + 1 < hits.length ? hits[i + 1].index : undefined).replace(/^\s*\n|\s+$/g, "");
+    if (key && body) out[key] = out[key] ? `${out[key]}\n${body}` : body;
+  });
+  if (out.act) { out.desc = [out.desc, `Actual result: ${out.act}`].filter(Boolean).join("\n"); delete out.act; }
+  if (out.title) out.title = out.title.split("\n")[0].trim();
+  // blank lines between steps make them hard to read
+  if (out.steps) out.steps = out.steps.replace(/\n\s*\n/g, "\n");
+  return out;
+}
+
 // One bug as a card: severity colour on the left, the essentials, status on the right. Click to open.
 function BugCard({ b, tester, onOpen, onVerify }) {
   const m = b.meta || {}, nc = (m.comments || []).filter(c => c.text || c.files?.length).length;
@@ -625,7 +659,7 @@ function BugCard({ b, tester, onOpen, onVerify }) {
           {m.files?.length > 0 && <span><Paperclip size={13} /> {m.files.length}</span>}
           {nc > 0 && <span><MessageSquare size={13} /> {nc}</span>}
         </div>
-        {m.steps && <p className="bg-steps"><Linkify text={m.steps} /></p>}
+        {(m.desc || m.steps) && <p className="bg-steps"><Linkify text={m.desc || m.steps} /></p>}
       </div>
       <div className="bg-side">
         <div className="bg-pills">{bugPill(m.status)}<SeenPill m={m} /></div>
@@ -692,7 +726,7 @@ function BugView({ bug, tester, onClose, act, onSeen }) {
           {m.mins > 0 && <span className="pill p-gr">Time: {fmtMins(m.mins)}</span>}
         </div>
         <p className="sub" style={{ marginTop: 0 }}>{[bug.refName, m.mod, b4(bug), m.assignName ? `to ${m.assignName}` : "", fd(bug.date)].filter(Boolean).join(" · ")}</p>
-        {m.steps && <p className="bug-steps"><Linkify text={m.steps} /></p>}
+        <BugText m={m} />
         {bug.url && <a className="url" href={bug.url} target="_blank" rel="noopener noreferrer">{bug.url.replace(/^https?:\/\//, "")}</a>}
         <Files list={m.files} />
 
@@ -746,7 +780,7 @@ const fdt = (d) => { const x = new Date(d); return `${fd(iso(x))}, ${x.toLocaleT
 
 // Tester: send many bugs to one developer in one go
 const OTHER = "__other";
-const newRow = () => ({ k: Math.random().toString(36).slice(2), title: "", mod: "", sev: "Medium", steps: "", t: "", unit: "min", url: "", files: [] });
+const newRow = () => ({ k: Math.random().toString(36).slice(2), title: "", mod: "", sev: "Medium", desc: "", steps: "", exp: "", t: "", unit: "min", url: "", files: [] });
 function SendBugs({ onSent }) {
   const P = usePortal();
   const projects = P.assigned.projects;
@@ -761,6 +795,14 @@ function SendBugs({ onSent }) {
   const mins = (r) => Math.round((+r.t || 0) * (r.unit === "h" ? 60 : 1));
   const filled = rows.filter(r => r.title.trim());
   const total = filled.reduce((a, r) => a + mins(r), 0);
+  // a whole bug pasted in the testers' format goes into the right boxes
+  const paste = (k) => (e) => {
+    const o = splitBug(e.clipboardData.getData("text") || "");
+    if (!o) return;
+    e.preventDefault();
+    setRows(L => L.map(r => (r.k === k ? { ...r, ...o } : r)));
+    toast("Filled the boxes from the pasted bug");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -768,7 +810,7 @@ function SendBugs({ onSent }) {
     if (ref === OTHER && !otherName.trim()) { toast("Type the project name"); return; }
     setBusy(true);
     try {
-      const items = filled.map(r => ({ title: r.title.trim(), mod: r.mod.trim(), sev: r.sev, steps: r.steps.trim(), mins: mins(r), url: fullUrl(r.url.trim()), files: r.files }));
+      const items = filled.map(r => ({ title: r.title.trim(), mod: r.mod.trim(), sev: r.sev, desc: r.desc.trim(), steps: r.steps.trim(), exp: r.exp.trim(), mins: mins(r), url: fullUrl(r.url.trim()), files: r.files }));
       const where = ref === OTHER ? { refId: "", refName: otherName.trim() } : { refId: ref };
       await api("/bugs/batch", { method: "POST", body: { ...where, assign: dev, date: today(), items } });
       toast(`${items.length} bug${items.length > 1 ? "s" : ""} sent to ${devs.find(d => d.id === dev)?.name || "the developer"}`);
@@ -805,8 +847,8 @@ function SendBugs({ onSent }) {
         <section className={`card sb-bug sev-${r.sev.toLowerCase()}`} key={r.k}>
           <div className="sb-bug-h">
             <span className="sb-num">{i + 1}</span>
-            <input type="text" className="sb-title" aria-label={`Bug ${i + 1}: what is wrong`} value={r.title} onChange={e => set(r.k, "title")(e.target.value)}
-              placeholder="What is wrong? Eg. Checkout total wrong when coupon applied" required={i === 0} />
+            <input type="text" className="sb-title" aria-label={`Bug ${i + 1}: issue title`} value={r.title} onChange={e => set(r.k, "title")(e.target.value)} onPaste={paste(r.k)}
+              placeholder="Issue title. Eg. Checkout total wrong when coupon applied" required={i === 0} />
             {rows.length > 1 && <button type="button" className="iconbtn sm" aria-label={`Remove bug ${i + 1}`} title="Remove" onClick={() => setRows(L => L.filter(x => x.k !== r.k))}>×</button>}
           </div>
           <div className="sb-grid">
@@ -819,7 +861,10 @@ function SendBugs({ onSent }) {
                 <select aria-label="Unit" value={r.unit} onChange={e => set(r.k, "unit")(e.target.value)}><option value="min">min</option><option value="h">hours</option></select>
               </div></div>
           </div>
-          <div className="f"><label htmlFor={`sb-st${r.k}`}>Steps to reproduce</label><textarea id={`sb-st${r.k}`} rows={3} value={r.steps} onChange={e => set(r.k, "steps")(e.target.value)} placeholder={"1. Open the cart\n2. Apply coupon NNC10\n3. Total does not change"} /></div>
+          <div className="f"><label htmlFor={`sb-ds${r.k}`}>Issue description</label><textarea id={`sb-ds${r.k}`} rows={3} value={r.desc} onChange={e => set(r.k, "desc")(e.target.value)} onPaste={paste(r.k)} placeholder="What happens now. Eg. After applying coupon NNC10 the total stays the same." /></div>
+          <div className="f"><label htmlFor={`sb-st${r.k}`}>Test steps</label><textarea id={`sb-st${r.k}`} rows={3} value={r.steps} onChange={e => set(r.k, "steps")(e.target.value)} onPaste={paste(r.k)} placeholder={"1. Open the cart\n2. Apply coupon NNC10\n3. Check the total"} /></div>
+          <div className="f"><label htmlFor={`sb-ex${r.k}`}>Expected result</label><textarea id={`sb-ex${r.k}`} rows={2} value={r.exp} onChange={e => set(r.k, "exp")(e.target.value)} onPaste={paste(r.k)} placeholder="What should happen. Eg. The total should drop by 10%." /></div>
+          <span className="sub sb-tip">Tip: paste a whole bug written as Issue Title / Issue Description / Test Steps / Expected Result into any box and it fills them all.</span>
           <div className="sb-foot">
             <div className="f"><label htmlFor={`sb-u${r.k}`}>Page or video link (optional)</label><input id={`sb-u${r.k}`} type="text" value={r.url} onChange={e => set(r.k, "url")(e.target.value)} placeholder="https://" /></div>
             <FilePick id={`sb-f${r.k}`} files={r.files} onChange={set(r.k, "files")} />
@@ -899,7 +944,7 @@ function Bugs() {
   const rg = rangeOf(dk, dFrom, dTo);
   const fnOf = (k) => TABS.find(t => t[0] === k)[2];
   const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1]))
-    && (!ql || (/^#?\d+$/.test(ql) ? String(b.no) === ql.replace("#", "") : `${b.meta?.bug} ${b.title} ${b.meta?.steps} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql))));
+    && (!ql || (/^#?\d+$/.test(ql) ? String(b.no) === ql.replace("#", "") : `${b.meta?.bug} ${b.title} ${b.meta?.desc || ""} ${b.meta?.steps} ${b.meta?.exp || ""} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql))));
   // every project with its bugs, by stage (date and severity filters apply, not the project filter)
   const PS = projects.map(p => {
     const L = all.filter(b => b.refName === p && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1])));
@@ -960,7 +1005,7 @@ function Bugs() {
                 <button key={l} type="button" className={`${sev === k ? "on" : ""} ${k ? `s-${k.toLowerCase()}` : ""}`} onClick={() => setSev(k)}>{l}</button>
               ))}
             </div>
-            <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number (e.g. 3), title or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
+            <label className="bg-search"><Search size={15} /><input type="search" placeholder="Search bug number (e.g. 3), title, description or steps" value={q} onChange={e => setQ(e.target.value)} aria-label="Search bugs" /></label>
             <select value={dk} onChange={e => setDk(e.target.value)} aria-label="Date raised" className={dk ? "on" : ""}>
               {DATES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
