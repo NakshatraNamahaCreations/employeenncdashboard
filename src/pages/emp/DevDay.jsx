@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { usePortal } from "../../auth/store";
 import { roleInfo, TY } from "../../roles";
 import { api } from "../../api";
-import { EntryLi, SubmitDay, Blocked, TaskRef } from "./EmpPages";
+import { EntryLi, SubmitDay, Blocked, TaskRef, PriPill } from "./EmpPages";
 import { ProjectCard } from "./Projects";
 import TodayPlan from "./TodayPlan";
 import { useProjects, byLive } from "./useProjects";
@@ -127,6 +127,7 @@ export default function DevDay() {
           <section className="card"><h3>Tasks due <Link className="btn sm r" to="/tasks">All tasks</Link></h3>
             {due.length ? due.map(t => (
               <div key={t._id} className="li"><div className="x"><b>{t.title}</b><span className="sub"><TaskRef t={t} empty="No project" /> · due {t.due === today() ? "today" : fd(t.due)}</span></div>
+                <PriPill t={t} />
                 {t.due < today() && <span className="pill p-red">Overdue</span>}
                 <button type="button" className="btn sm p" onClick={() => P.setTaskStatus(t._id, "done")}>Done</button></div>
             )) : <div className="empty">No tasks due.</div>}

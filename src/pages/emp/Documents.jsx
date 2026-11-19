@@ -6,6 +6,7 @@ import { usePortal } from "../../auth/store";
 import { api, fileUrl } from "../../api";
 import { ROLES, hasRole, initials } from "../../roles";
 import { toast } from "../../toast";
+import { matchesSearch } from "../../search";
 import Linkify from "../../Linkify";
 import { FilePick } from "../../FilePick";
 
@@ -55,7 +56,7 @@ export default function Documents() {
 
   const rec = data?.received || [], sent = data?.sent || [];
   const unseen = rec.filter(d => !d.seenAt).length;
-  const list = (tab === "sent" ? sent : rec).filter(d => !q || `${d.title} ${d.refName} ${d.fromName} ${d.toName} ${d.text}`.toLowerCase().includes(q.toLowerCase()));
+  const list = (tab === "sent" ? sent : rec).filter(d => matchesSearch(q, d.title, d.refName, d.fromName, d.toName, d.text, (d.files || []).map(x => x.name)));
   const cur = [...rec, ...sent].find(d => d._id === open);
   const roleOf = (id) => people.find(p => p.id === String(id))?.role;
 
@@ -137,7 +138,7 @@ function SendForm({ people, me, assigned, onSent }) {
   const [busy, setBusy] = useState(false);
   // developers first for a tester, then everyone else
   const sorted = useMemo(() => [...people].sort((a, b) => (hasRole(me, ["test"]) ? (DEV.includes(b.role) - DEV.includes(a.role)) : 0) || a.name.localeCompare(b.name)), [people, me]);
-  const shown = sorted.filter(p => !who.trim() || `${p.name} ${roleL(p.role)}`.toLowerCase().includes(who.trim().toLowerCase()));
+  const shown = sorted.filter(p => matchesSearch(who, p.name, roleL(p.role), p.phone, p.email));
   const person = people.find(p => p.id === to);
   const submit = async (e) => {
     e.preventDefault();
@@ -258,7 +259,7 @@ function MyDocs({ assigned }) {
   }, [from, to]);
   useEffect(() => { queueMicrotask(load); }, [load]);
   const refs = [...(assigned?.clients || []), ...(assigned?.projects || [])].map(x => x.name);
-  const shown = (L || []).filter(d => !q || `${d.title} ${d.refName} ${d.note} ${d.files.map(x => x.name).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = (L || []).filter(d => matchesSearch(q, d.title, d.refName, d.note, (d.files || []).map(x => x.name)));
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
 
   const save = async (e) => {

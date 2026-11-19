@@ -9,6 +9,7 @@ import { usePortal } from "../../auth/store";
 import { ROLES, roleInfo, hasRole } from "../../roles";
 import { api, fileUrl } from "../../api";
 import { toast } from "../../toast";
+import { matchesSearch } from "../../search";
 import { EntryLi } from "./EmpPages";
 import Modal from "../../Modal";
 import { today, fd, fdw, greet, rs, monthStart, iso, T } from "../../util";
@@ -276,7 +277,7 @@ function SavedAds({ clients, reload }) {
   const rows = (L || []).flatMap(r => [
     ...(hasG(r) ? [{ k: `${r._id}g`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Google Ads", m: r, sent: r.sent }] : []),
     ...(r.meta ? [{ k: `${r._id}m`, cid: String(r.client), date: r.date, client: r.clientName, pl: "Meta Ads", m: r.meta, sent: r.metaSent }] : []),
-  ]).filter(x => (!cid || x.cid === cid) && (!pl || x.pl === pl) && (!q || `${x.client} ${x.m.campaign || ""}`.toLowerCase().includes(q.toLowerCase())));
+  ]).filter(x => (!cid || x.cid === cid) && (!pl || x.pl === pl) && matchesSearch(q, x.client, x.m.campaign, x.pl));
   const pages = Math.max(1, Math.ceil(rows.length / per)), pg = Math.min(page, pages - 1);
   const shown = rows.slice(pg * per, pg * per + per);
   const sum = rows.reduce((o, x) => ({ spend: o.spend + (x.m.spend || 0), clicks: o.clicks + (x.m.clicks || 0), impr: o.impr + (x.m.impr || 0), conv: o.conv + (x.m.conv || 0) }), { spend: 0, clicks: 0, impr: 0, conv: 0 });
@@ -944,7 +945,7 @@ function Bugs() {
   const rg = rangeOf(dk, dFrom, dTo);
   const fnOf = (k) => TABS.find(t => t[0] === k)[2];
   const base = all.filter(b => (!proj || b.refName === proj) && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1]))
-    && (!ql || (/^#?\d+$/.test(ql) ? String(b.no) === ql.replace("#", "") : `${b.meta?.bug} ${b.title} ${b.meta?.desc || ""} ${b.meta?.steps} ${b.meta?.exp || ""} ${b.meta?.mod} ${b.refName}`.toLowerCase().includes(ql))));
+    && (!ql || (/^#?\d+$/.test(ql) ? String(b.no) === ql.replace("#", "") : matchesSearch(ql, b.meta?.bug, b.title, b.meta?.desc, b.meta?.steps, b.meta?.exp, b.meta?.mod, b.refName, b.account?.name, b.meta?.assignName))));
   // every project with its bugs, by stage (date and severity filters apply, not the project filter)
   const PS = projects.map(p => {
     const L = all.filter(b => b.refName === p && (!sev || (b.meta?.sev || "Medium") === sev) && (!rg || (b.date >= rg[0] && b.date <= rg[1])));
@@ -1052,7 +1053,7 @@ function Payments() {
   const [q, setQ] = useState("");
   const L = P.assigned.projects;
   const bal = (p) => Math.max(0, (p.total || 0) - (p.received || 0));
-  const shown = L.filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase())).sort((a, b) => bal(b) - bal(a));
+  const shown = L.filter(p => matchesSearch(q, p.name, p.business, p.phone)).sort((a, b) => bal(b) - bal(a));
   const inv = P.entries.filter(e => e.type === "invoice" && e.date >= monthStart());
   return (
     <>

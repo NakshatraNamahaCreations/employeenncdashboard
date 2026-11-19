@@ -5,6 +5,7 @@ import Modal from "../../Modal";
 import { initials } from "../../roles";
 import { api } from "../../api";
 import { toast } from "../../toast";
+import { matchesSearch } from "../../search";
 import { fd } from "../../util";
 import { downloadCsv } from "../../csv";
 
@@ -80,7 +81,7 @@ export default function MyClients() {
   const [open, setOpen] = useState("");
   const [see, setSee] = useState(null);   // { c, type }: the list behind a number
   useEffect(() => { api("/my-clients").then(j => setL(j.data), e => { toast(e.message); setL([]); }); }, []);
-  const shown = (L || []).filter(c => !q || `${c.name} ${c.contact} ${c.site}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = (L || []).filter(c => matchesSearch(q, c.name, c.contact, c.site, c.phone, c.email));
   const hr = new Date().getHours();
 
   return (

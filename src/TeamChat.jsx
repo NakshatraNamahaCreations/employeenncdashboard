@@ -6,6 +6,7 @@ import Mascot from "./Mascot";
 import { api } from "./api";
 import { ROLES, initials } from "./roles";
 import { toast } from "./toast";
+import { matchesSearch } from "./search";
 import { useRise, useNewMessage } from "./ding";
 import { useLive, every, useTyping, sayTyping, typingText } from "./live";
 import { Tick } from "./Tick";
@@ -103,7 +104,7 @@ export default function TeamChat() {
 
   if (open && hello) setHello(false);
   const groups = chans.filter(c => c.kind === "group");
-  const dms = chans.filter(c => c.kind === "dm" && (!q || `${c.name} ${roleL(c.role)}`.toLowerCase().includes(q.toLowerCase())))
+  const dms = chans.filter(c => c.kind === "dm" && matchesSearch(q, c.name, roleL(c.role)))
     .sort((a, b) => (b.unread - a.unread) || (new Date(b.last?.at || 0) - new Date(a.last?.at || 0)) || a.name.localeCompare(b.name));
 
   return (

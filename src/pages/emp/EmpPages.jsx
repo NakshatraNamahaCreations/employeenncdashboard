@@ -86,6 +86,13 @@ export function TaskRef({ t, empty }) {
   return mine ? <Link to={`/projects/${t.refId}`}>{t.refName}</Link> : t.refName;
 }
 
+// how urgent a task is (set by the admin)
+export function PriPill({ t }) {
+  const p = t.priority || "Medium";
+  if (t.status === "done") return null;
+  return <span className={`pill ${p === "High" ? "p-red" : p === "Low" ? "p-gr" : "p-amb"}`} title="Priority">{p}</span>;
+}
+
 function TaskLi({ t, onStatus }) {
   const late = t.status !== "done" && t.due < today();
   return (
@@ -94,6 +101,7 @@ function TaskLi({ t, onStatus }) {
         <span className="sub"><TaskRef t={t} empty="No client or project" /> · {t.from === "me" ? "my task" : `from ${t.from}`} · due {t.due === today() ? "today" : fd(t.due)}</span></div>
       {t.status === "done" ? <span className="pill p-ok">Done</span> : (
         <>
+          <PriPill t={t} />
           {late && <span className="pill p-red">Overdue</span>}
           {t.status === "doing" && <span className="pill p-blue">Doing</span>}
           {t.status === "todo" && <button type="button" className="btn sm" onClick={() => onStatus(t._id, "doing")}>Start</button>}

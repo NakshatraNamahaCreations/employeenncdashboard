@@ -5,6 +5,7 @@ import { usePortal } from "../../auth/store";
 import { api, upload, fileUrl } from "../../api";
 import { roleInfo } from "../../roles";
 import { toast } from "../../toast";
+import { matchesSearch } from "../../search";
 import { confirmBox } from "../../confirm";
 import { today, fdy as fd, fdwy as fdw, ampm, greet, nowHM } from "../../util";
 import DateDMY from "../../DateDMY";
@@ -217,7 +218,7 @@ export default function Meetings() {
   const allSends = P.meetings.flatMap(x => (x.sendLog || []).map(l => ({ ...l, m: x }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const ms = today().slice(0, 7);
 
-  const shown = L.filter(x => !q || `${x.title} ${x.refName}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = L.filter(x => matchesSearch(q, x.title, x.refName, x.where, x.notes, x.momTxt, x.with, fd(x.date), x.date));
   const list = (
     <section className="card"><h3>My meetings <small>{L.length}</small>
       <input className="r mt-q" type="search" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} aria-label="Search meetings" />
