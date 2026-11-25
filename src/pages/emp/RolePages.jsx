@@ -14,6 +14,7 @@ import { EntryLi } from "./EmpPages";
 import Modal from "../../Modal";
 import { today, fd, fdw, greet, rs, monthStart, iso, T } from "../../util";
 import { downloadCsv } from "../../csv";
+import DateDMY from "../../DateDMY";
 
 export function RolePage() {
   const { rolePage } = useParams();
@@ -333,6 +334,20 @@ function SavedAds({ clients, reload }) {
 const CAMP0 = { campaign: "", impr: "", clicks: "", ctr: "", spend: "", cpc: "", conv: "" };
 let kSeq = 1;
 const newK = () => ++kSeq;
+// "Sir" or "Madam" after the contact's name in the client message: a guess from the name, the
+// employee can change it and it is remembered for that client on this computer.
+const FEMALE = /(a|i|ee|ini|shree|shri|devi|amma|vathi|bai|ben)$/i;
+const MALE_A = /^(krishna|surya|rama|shiva|siva|venkata|ravi|hari|mani|sai|giri|ajja|appa|anna|raja|aditya|chaitanya|bala|ganapathi|guru|venki|shashi|murali|gopi|ravi|naveen|tushar)$/i;
+const guessTitle = (name) => {
+  const first = String(name || "").trim().split(/\s+/)[0] || "";
+  if (!first || /^(mr|sir)\.?$/i.test(first)) return "sir";
+  if (/^(mrs|ms|miss|madam)\.?$/i.test(first)) return "madam";
+  return FEMALE.test(first) && !MALE_A.test(first) ? "madam" : "sir";
+};
+const titleKey = (cid) => `nnc-ads-title-${cid}`;
+const readTitle = (cid) => { try { return localStorage.getItem(titleKey(cid)) || ""; } catch { return ""; } };
+const keepTitle = (cid, t) => { try { localStorage.setItem(titleKey(cid), t); } catch { /* not kept */ } };
+
 function AdsReport() {
   const P = usePortal();
   const C = P.assigned.clients;
@@ -347,7 +362,11 @@ function AdsReport() {
   const [plat, setPlat] = useState("google");   // google | meta
   const [fileKey, setFileKey] = useState(0);     // clears the chosen file after a save
   const [rn, setRn] = useState(0);               // reloads the saved reports after a save
-  const [day, setDay] = useState(today());       // the day the numbers are for (yesterday's report can be sent today)
+  // the day the numbers are for: today unless another day is picked (yesterday's report can be sent today).
+  // Kept empty for "today" so a page left open overnight moves to the new day by itself.
+  const [pick, setDay] = useState("");
+  const day = pick && pick < today() ? pick : today();
+  const [ttl, setTtl] = useState("");   // "sir" | "madam" | "none", picked by hand
   const [terms, setTerms] = useState("");
   const [msg, setMsg] = useState("");
   const [saved, setSaved] = useState(null);
@@ -358,7 +377,10 @@ function AdsReport() {
   const sp = tot.spend || L.reduce((a, t) => a + t.cost, 0);
   const w = wasted(L, sp);
   const onFile = (file) => { if (!file) return; const r = new FileReader(); r.onload = () => { setTerms(String(r.result)); toast("Search terms loaded"); }; r.readAsText(file); };
-  const pickClient = (v) => { setCid(v); setMsg(""); setSaved(null); };
+  const pickClient = (v) => { setCid(v); setMsg(""); setSaved(null); setTtl(""); };
+  const contactName = (f.contact || cl?.contact || "").trim();
+  const title = ttl || readTitle(client) || guessTitle(contactName);
+  const hasTitle = /\b(sir|madam|mam|ma'am|ji)\b/i.test(contactName);
   const PL = plat === "meta" ? "Meta Ads" : "Google Ads";
   // CTR and CPC: what was typed, else worked out from the numbers
   const autoCtr = (r) => (+r.impr ? ((+r.clicks / +r.impr) * 100).toFixed(2) : "");
@@ -376,7 +398,8 @@ function AdsReport() {
     const names = R.map(r => r.campaign.trim()).filter(Boolean);
     const google = plat === "google";
     const top = google ? [...L].sort((a, b) => b.clicks - a.clicks).slice(0, 5) : [];
-    const contact = f.contact || cl?.contact || "";
+    const contact = contactName && !hasTitle && title !== "none" ? `${contactName} ${title}` : contactName;
+    if (ttl) keepTitle(client, ttl);
     const isToday = day === today();
     setBusy(true);
     try {
@@ -439,8 +462,14 @@ Nakshatra Namaha Creations`);
                 <div className="f"><label htmlFor="ap">Platform</label>
                   <select id="ap" value={plat} onChange={e => { setPlat(e.target.value); setMsg(""); setSaved(null); }}><option value="google">Google Ads</option><option value="meta">Meta Ads</option></select></div>
                 <div className="f"><label htmlFor="ad">Report for the day</label>
-                  <input id="ad" type="date" value={day} max={today()} onChange={e => { if (e.target.value) { setDay(e.target.value); setMsg(""); setSaved(null); } }} /></div>
-                <div className="f"><label htmlFor="acn">Contact name (for the message)</label><input id="acn" type="text" value={f.contact} onChange={set("contact")} placeholder={cl?.contact || "Eg. Supreeth sir"} /></div>
+                  <DateDMY id="ad" value={day} max={today()} onChange={e => { if (e.target.value) { setDay(e.target.value === today() ? "" : e.target.value); setMsg(""); setSaved(null); } }} /></div>
+                <div className="f"><label htmlFor="acn">Contact name (for the message)</label>
+                  <div className="ad-ttl">
+                    <input id="acn" type="text" value={f.contact} onChange={set("contact")} placeholder={cl?.contact || "Eg. Supreeth"} />
+                    <select aria-label="Sir or Madam" value={hasTitle ? "none" : title} disabled={hasTitle} onChange={e => setTtl(e.target.value)} title="Added after the name in the message">
+                      <option value="sir">Sir</option><option value="madam">Madam</option><option value="none">None</option>
+                    </select>
+                  </div></div>
               </div>
               <ClientPick clients={C} value={client} onChange={pickClient} />
               {rows.map((r, i) => (

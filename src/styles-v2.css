@@ -1111,3 +1111,8 @@ input:not([type]) { border: 1px solid #D0D5DD; border-radius: 9px; padding: 9px 
 .bug-sec h5 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: #64748B; }
 .bug-sec .bug-steps { margin: 0; }
 .sb-tip { display: block; margin-top: 2px; }
+
+/* Ads report: contact name with Sir / Madam */
+.ad-ttl { display: flex; gap: 6px; }
+.ad-ttl input { flex: 1; min-width: 0; }
+.ad-ttl select { width: auto; flex: none; }

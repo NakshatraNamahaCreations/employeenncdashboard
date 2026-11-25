@@ -114,20 +114,25 @@ function TaskLi({ t, onStatus }) {
 
 const hoursOn = (entries, d) => entries.filter(e => e.date === d).reduce((a, e) => a + (e.hrs || 0), 0);
 
-function WeekStrip({ entries, days }) {
+// Submitted, open (today), leave or holiday from the CRM, worked but not submitted, or nothing at all
+const OFF_L = { leave: "On leave", holiday: "Holiday", absent: "Absent", "half-day": "Half day" };
+function WeekStrip({ entries, days, off = [] }) {
   const ws = weekStart();
   return (
     <div className="week">
       {Array.from({ length: 6 }, (_, i) => {
         const x = parse(ws); x.setDate(x.getDate() + i);
         const d = iso(x), h = hoursOn(entries, d), sub = days.some(s => s.date === d), fut = d > today();
+        const o = off.find(z => z.date === d)?.status;
+        const [txt, col, tip] = sub ? ["Submitted", "var(--ok)"] : fut ? ["", "var(--mut)"] : d === today() ? ["Open", "var(--amb)"]
+          : o && (o !== "half-day" || !h) ? [OFF_L[o] || o, "var(--mut)", "Marked in the attendance"]
+          : h ? ["Not submitted", "var(--amb)", "Work was logged but the day was not submitted"]
+          : ["No work logged", "var(--red)", "Nothing logged and the day was not submitted"];
         return (
-          <div key={d} className={d === today() ? "td" : ""}>
+          <div key={d} className={d === today() ? "td" : ""} title={tip || ""}>
             <div className="sub">{DOW[x.getDay()]}</div>
             <div className="pos">{fut ? "-" : `${h1(h)}h`}</div>
-            <div style={{ fontSize: 10.5, color: sub ? "var(--ok)" : fut ? "var(--mut)" : d === today() ? "var(--amb)" : "var(--red)" }}>
-              {sub ? "Submitted" : fut ? "" : d === today() ? "Open" : "Missing"}
-            </div>
+            <div style={{ fontSize: 10.5, color: col }}>{txt}</div>
           </div>
         );
       })}
@@ -193,7 +198,7 @@ function StdDay() {
           <TodayPlan refs={mine} yesterday={last && last.date < today() ? last.plan : ""} />
           <section className="card"><h3>Tasks for today <Link className="btn sm r" to="/tasks">All tasks</Link></h3>
             {due.length ? due.map(t => <TaskLi key={t._id} t={t} onStatus={P.setTaskStatus} />) : <div className="empty">No tasks due today.</div>}</section>
-          <section className="card"><h3>This week</h3><div className="pad"><WeekStrip entries={P.entries} days={P.days} /></div></section>
+          <section className="card"><h3>This week</h3><div className="pad"><WeekStrip entries={P.entries} days={P.days} off={P.off} /></div></section>
         </div>
       </div>
       {modal === "submit" && <SubmitDay h={h} n={L.length} due={due} onClose={() => setModal(null)} onSubmit={async (d) => { await P.submitDay(d); setModal(null); }} />}

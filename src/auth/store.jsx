@@ -11,7 +11,7 @@ const Ctx = createContext(null);
 export const usePortal = () => useContext(Ctx);
 
 const NO_NOTIF = { list: [], unread: 0, unreadMessages: 0 };
-const EMPTY = { entries: [], days: [], tasks: [], blockers: [], meetings: [], assigned: { clients: [], projects: [] } };
+const EMPTY = { entries: [], days: [], off: [], tasks: [], blockers: [], meetings: [], assigned: { clients: [], projects: [] } };
 // The last data loaded is kept in this browser, so the portal shows it straight away and updates it in the background
 const cacheKey = (s) => (s?.user?.id ? `nnc-portal-cache-${s.user.id}` : "");
 const readCache = (s) => { try { const k = cacheKey(s); const j = k && JSON.parse(localStorage.getItem(k) || "null"); return j?.entries ? { ...EMPTY, ...j } : EMPTY; } catch { return EMPTY; } };
@@ -53,7 +53,7 @@ export function PortalProvider({ children }) {
       ]);
       if (me) setSession(s => { const n = { ...s, user: me.data }; writeAuth(n, !!localStorage.getItem("nnc-portal-auth")); return n; });
       setData(d => {
-        const n = { entries: work.data.work, days: work.data.days, tasks: tasks.data, blockers: blockers.data, meetings: meetings.data, assigned: assigned ? assigned.data : d.assigned };
+        const n = { entries: work.data.work, days: work.data.days, off: work.data.off || [], tasks: tasks.data, blockers: blockers.data, meetings: meetings.data, assigned: assigned ? assigned.data : d.assigned };
         writeCache(readAuth(), n);
         return n;
       });
