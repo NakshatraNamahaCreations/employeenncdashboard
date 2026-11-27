@@ -25,7 +25,7 @@ function OnlyComputer() {
         <img src="/nnclogo.png" alt="NNC" />
         <h1>Please use a computer</h1>
         <p>The NNC Employee Portal works only on a laptop or desktop computer. Signing in from a mobile phone or tablet is not allowed, including with "Desktop site" turned on.</p>
-        <p className="nomob-s">Open <b>employee.nakshatranamahacreations.com</b> on your office computer to sign in.</p>
+        <p className="nomob-s">Open <b>employee.nakshatranamahacreations.co.in</b> on your office computer to sign in.</p>
       </div>
     </div>
   );
